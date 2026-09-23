@@ -12,7 +12,7 @@ known**.
 
 <p align="center">
   <a href="#quick-start">
-    <img src="https://raw.githubusercontent.com/austin-starks/sec-ownership-disclosures/main/graphic/out/readme-demo.gif" alt="Back-fill twenty years of SEC insider filings with one resumable command, audited by re-parsing the archives" width="100%" />
+    <img src="https://nexustrade-prod.nyc3.cdn.digitaloceanspaces.com/open-source/sec-ownership-disclosures/readme-demo-8ebcc497e31d.gif" alt="Back-fill twenty years of SEC insider filings with one resumable command, audited by re-parsing the archives" width="100%" />
   </a>
 </p>
 
