@@ -16,3 +16,4 @@ export * from "./lake/holdingsShardRows";
 export * from "./lake/holdingsMerge";
 export * from "./backfill/index";
 export * from "./runtime/nodeHttp";
+export * from "./dataset/index";

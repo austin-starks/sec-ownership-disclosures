@@ -39,6 +39,7 @@
     "./package.json": "./package.json"
   },
   "bin": {
+    "sec-ownership-disclosures": "dist/cli.js",
     "sec-backfill": "dist/cli/secBackfill.js",
     "sec-integrity": "dist/cli/secIntegrity.js",
     "sec-lags": "dist/cli/secLags.js"
@@ -66,6 +67,8 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1137.0",
     "cheerio": "^1.2.0",
+    "hyparquet": "^1.31.1",
+    "hyparquet-compressors": "^1.1.2",
     "jszip": "^3.10.2",
     "moment-timezone": "^0.5.46"
   },

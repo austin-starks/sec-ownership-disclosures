@@ -5,6 +5,9 @@ transactions and institutional 13F holdings — from official EDGAR sources, wit
 the one column most datasets leave out: **when each filing could first have been
 known**.
 
+One command downloads the published snapshot as SQLite; another builds the
+whole lake from EDGAR yourself.
+
 [![npm](https://img.shields.io/npm/v/sec-ownership-disclosures)](https://www.npmjs.com/package/sec-ownership-disclosures)
 [![CI](https://github.com/austin-starks/sec-ownership-disclosures/actions/workflows/ci.yml/badge.svg)](https://github.com/austin-starks/sec-ownership-disclosures/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](https://github.com/austin-starks/sec-ownership-disclosures/blob/main/LICENSE)
@@ -58,6 +61,39 @@ Twenty years of Form 3/4/5, from 81 quarterly data sets, plus 54 windows of 13F.
   CIK, accession and CUSIP.
 
 ## Quick start
+
+There are two doors, and they answer different questions.
+
+### 1. Download the published dataset
+
+No SEC etiquette, no twenty-year backfill, no credentials:
+
+```bash
+npx sec-ownership-disclosures download --sqlite
+```
+
+That fetches [the published
+dataset](https://huggingface.co/datasets/austin-starks/sec-ownership-disclosures),
+verifies every file against the `sha256` in `snapshot.json`, and leaves a SQLite
+database you can query immediately:
+
+```bash
+sqlite3 sec-ownership-data/sec-ownership.db \
+  "SELECT issuerTicker, count(*) FROM insider_transactions
+    WHERE transactionCode = 'P' AND availableAt <= '2024-06-30'
+    GROUP BY 1 ORDER BY 2 DESC LIMIT 10"
+```
+
+The whole dataset is a few GB, so start with a slice — `--table
+insider_transactions`, `--year 2024`, or both. A file already on disk with the
+right digest is reused, so an interrupted download resumes for free, and the
+digest check means a truncated or tampered mirror fails instead of quietly
+answering the wrong question.
+
+### 2. Build the lake yourself
+
+The published dataset is a snapshot. Running the pipeline is how you get a lake
+that is current, that you control, and that you can audit line by line:
 
 ```bash
 npm install sec-ownership-disclosures
