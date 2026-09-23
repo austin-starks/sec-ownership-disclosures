@@ -62,7 +62,8 @@
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
     "test": "jest",
     "prepare": "npm run build",
-    "verify:release": "npm run build && npm test && npm pack --dry-run"
+    "verify:release": "npm run build && npm test && npm pack --dry-run",
+    "typecheck:examples": "tsc --noEmit --strict --esModuleInterop --skipLibCheck --target ES2020 --moduleResolution node examples/*.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1137.0",

@@ -8,6 +8,7 @@ export * from "./lake/insiderShardRows";
 export * from "./backfill/insiderRefresh";
 export * from "./sources/thirteenFDatasets";
 export * from "./sources/nportDatasets";
+export * from "./sources/openFigiClient";
 export * from "./sources/form345Datasets";
 export * from "./sources/edgarDaily";
 export * from "./extraction/infoTable";

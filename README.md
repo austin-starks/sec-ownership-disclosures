@@ -204,8 +204,60 @@ the two eras were verified to be disjoint accession sets (409,685 distinct of
   the 24,004 CUSIPs that carry one are all 2024 or later — FIGI became an
   optional 13F column in the 2023 amendments. The "3.7% overall" figure this
   file used to quote was arithmetically true and read as thinly spread, when it
-  is in fact *absent for eleven of fourteen years*. CUSIP→ticker mapping is the
-  remaining work, and the package does not pretend otherwise.
+  is in fact *absent for eleven of fourteen years*. So FIGI cannot bridge to a
+  ticker across the history, and 0.3.0 resolves the CUSIP instead — see below.
+
+## Resolving a CUSIP to a ticker
+
+A 13F names a security by CUSIP and nothing else. No ticker, no CIK. That makes
+the holdings table unjoinable to prices and unusable in a screener until
+something resolves it, so the package resolves it rather than leaving it to the
+reader.
+
+Two sources, because neither covers the history alone:
+
+| source | what it is | CUSIPs |
+|---|---|---|
+| **N-PORT** | SEC's own quarterly fund holdings, which print CUSIP *and* ticker on the same holding | 29,990 |
+| **OpenFIGI** | OpenFIGI's `/v3/mapping`, for CUSIPs no registered fund held | 53,468 |
+
+N-PORT is preferred and runs first: it is SEC data pairing the two identifiers
+in one row, and it covers **97.62% of 13F holdings by value**. OpenFIGI fills
+the long tail.
+
+```ts
+const rows = await parseThirteenFDataset(zip, archiveKey);
+normalizeThirteenFValuesToDollars(rows);
+
+const url = nportDatasetUrl(2025, 2);
+const members = await fetchNportMembers(http, url, [NPORT_HOLDING_MEMBER, NPORT_IDENTIFIERS_MEMBER]);
+const { pairs } = buildCrosswalkFromMembers(
+  members.get(NPORT_HOLDING_MEMBER)!,
+  members.get(NPORT_IDENTIFIERS_MEMBER)!,
+  "nport-2025q2",
+);
+
+const report = resolveHoldingTickers(rows, pairs);
+```
+
+The same thing with the missing-member guard is
+[`examples/resolve-tickers.ts`](./examples/resolve-tickers.ts), which
+`npm run typecheck:examples` compiles against the built package — so every
+identifier above is checked rather than transcribed.
+
+`fetchNportQuarter` needs `SecHttp.getRange`. An N-PORT quarter is a 440 MB ZIP
+holding 32 members, and only two of them pair the identifiers, so the reader
+takes the central directory from a 128 KB suffix request and range-fetches just
+those two. Implement `getRange` on your HTTP adapter or the call throws saying
+so; it will not silently download the whole archive.
+
+**Do not pin `exchCode: "US"` on OpenFIGI.** It excludes delisted securities,
+which is most of what a fourteen-year 13F history holds. It cut the mapped set
+from 53,468 to 19,660 — Twitter among the casualties.
+
+A CUSIP with several tickers is a share class or a dual listing, and
+`resolveHoldingTickers` takes the first pair you give it. Pass them in the
+order you trust.
 
 Full detail, with how each number was produced: [METHODOLOGY.md](./METHODOLOGY.md).
 
