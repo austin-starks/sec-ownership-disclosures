@@ -20,7 +20,11 @@ now it is here.
 - **Added** `sources/openFigiClient` — OpenFIGI mapping for CUSIPs no fund
   holds. Do NOT pin `exchCode: "US"`: a delisted security has no US venue row,
   so it silently returns nothing for exactly the names that need resolving.
+- **Added** `extraction/resolveHoldingTickers` — stamps `resolvedTicker` onto a
+  parsed dataset from any pair source, so the package does the whole job rather
+  than handing out the pieces.
 - **Added** `SecHttp.getRange`, optional, for archives too large to hold whole.
+- **Added** `examples/resolve-tickers.ts`, compiled by `npm run typecheck:examples`.
 
 ### `valueUnitSource` makes uncertainty explicit
 
@@ -33,8 +37,11 @@ Which evidence decided a row's unit, strongest first:
 | `date` | SEC's rule alone, which filers break in both directions |
 | `unknown` | undetermined — do not trust this row's dollar value |
 
-Prices are looked up on **`periodOfReport`**, not `filingDate`: a 13F values its
-holdings as of the period end and is filed 30-45 days later.
+`normalizeThirteenFValuesToDollars` sets `median`, `date` and `unknown`. The
+package ships no price history, so `price` is for a consumer that holds one to
+write after the fact — and it must look the price up on **`periodOfReport`**,
+not `filingDate`: a 13F values its holdings as of the period end and is filed
+30-45 days later.
 
 
 ## 0.2.0
