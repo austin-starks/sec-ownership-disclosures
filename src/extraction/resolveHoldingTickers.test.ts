@@ -41,12 +41,23 @@ describe("resolveHoldingTickers", () => {
     expect(report).toEqual({ resolved: 1, unresolved: 1, unresolvedCusips: 1, outsideEverySpan: 0 });
   });
 
-  it("matches regardless of case or padding, because filings are not consistent", () => {
+  it("matches a CUSIP regardless of case or padding, because filings are not consistent", () => {
     const rows = dataset([holding(" 037833100 ", "2025-02-14")]);
 
-    resolveHoldingTickers(rows, [{ cusip: "037833100", ticker: "aapl" }]);
+    resolveHoldingTickers(rows, [{ cusip: " 037833100 ", ticker: "AAPL" }]);
 
     expect(rows.holdings[0]!.resolvedTicker).toBe("AAPL");
+  });
+
+  it("preserves ticker case, because the trailing letter is the share class", () => {
+    // `MTLp` is Mechel's preferred ADS and `WRKw` is a when-issued line.
+    // Uppercasing either collapses it onto the common stock, which then
+    // prices as a different instrument.
+    const rows = dataset([holding("583840509", "2015-08-14")]);
+
+    resolveHoldingTickers(rows, [{ cusip: "583840509", ticker: "MTLp" }]);
+
+    expect(rows.holdings[0]!.resolvedTicker).toBe("MTLp");
   });
 
   it("gives a row the symbol its security traded under ON ITS OWN DATE", () => {

@@ -61,7 +61,10 @@ export function resolveHoldingTickers(
   const byCusip = new Map<string, TickerSpan[]>();
   for (const span of spans) {
     const cusip = span.cusip.trim().toUpperCase();
-    const ticker = span.ticker?.trim().toUpperCase();
+    // Case is preserved, never normalized: the trailing letter of `MTLp`,
+    // `CELGr` or `WRKw` is the share class, and uppercasing it collapses a
+    // preferred share or a warrant onto the common stock.
+    const ticker = span.ticker?.trim();
     if (!cusip || !ticker) continue;
     const list = byCusip.get(cusip) ?? [];
     list.push({ ...span, cusip, ticker });
