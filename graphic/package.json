@@ -1,0 +1,20 @@
+{
+  "name": "sec-ownership-disclosures-graphic",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Remotion sources for the README demo animation.",
+  "scripts": {
+    "studio": "remotion studio",
+    "render-readme": "remotion render ReadmeDemo out/readme-demo.gif --codec=gif --every-nth-frame=2"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.512",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "remotion": "4.0.512"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "typescript": "^5.7.2"
+  }
+}

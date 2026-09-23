@@ -10,6 +10,12 @@ known**.
 [![license](https://img.shields.io/badge/license-MIT-blue)](https://github.com/austin-starks/sec-ownership-disclosures/blob/main/LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D22.5-brightgreen)](https://nodejs.org/)
 
+<p align="center">
+  <a href="#quick-start">
+    <img src="https://raw.githubusercontent.com/austin-starks/sec-ownership-disclosures/main/graphic/out/readme-demo.gif" alt="Back-fill twenty years of SEC insider filings with one resumable command, audited by re-parsing the archives" width="100%" />
+  </a>
+</p>
+
 **This is the open-source SEC ownership engine behind
 [NexusTrade](https://nexustrade.io).** The package gives you the extraction
 pipeline, the audit suite, and a lake you control. NexusTrade adds market data,
