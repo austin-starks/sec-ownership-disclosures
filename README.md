@@ -216,14 +216,17 @@ reader.
 
 Two sources, because neither covers the history alone:
 
-| source | what it is | CUSIPs |
+| source | what it is | distinct CUSIPs it contributes |
 |---|---|---|
-| **N-PORT** | SEC's own quarterly fund holdings, which print CUSIP *and* ticker on the same holding | 29,990 |
-| **OpenFIGI** | OpenFIGI's `/v3/mapping`, for CUSIPs no registered fund held | 53,468 |
+| **N-PORT** | SEC's own quarterly fund holdings, which print CUSIP *and* ticker on the same holding | 60,763 |
+| **OpenFIGI** | OpenFIGI's `/v3/mapping`, for CUSIPs no registered fund held | 42,748 |
+| | **combined** | **103,511** |
 
-N-PORT is preferred and runs first: it is SEC data pairing the two identifiers
-in one row, and it covers **97.62% of 13F holdings by value**. OpenFIGI fills
-the long tail.
+Measured from one quarter of N-PORT (2026q2), so N-PORT's share grows as more
+quarters are folded in. It is preferred and runs first: it is SEC data pairing
+the two identifiers in one row. OpenFIGI fills what no registered fund held,
+and contributed 42,748 CUSIPs N-PORT did not already cover — the counts above
+are disjoint, not two totals.
 
 ```ts
 const rows = await parseThirteenFDataset(zip, archiveKey);
