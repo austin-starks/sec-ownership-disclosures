@@ -12,6 +12,9 @@ import type { CusipTickerPair } from "./cusipTickerCrosswalk";
  *
  * A CUSIP with several tickers is a share class or a dual listing. The caller's
  * order decides, and the first pair wins, so pass them in the order you trust.
+ * Normalize before passing: a Bloomberg composite (`CCO CN`) must be rejected
+ * rather than stripped, because bare `CCO` is a different company in the US.
+ * See the README for the measured failure rates.
  */
 export interface TickerResolutionReport {
   resolved: number;

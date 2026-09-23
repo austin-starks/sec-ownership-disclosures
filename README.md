@@ -260,7 +260,22 @@ from 53,468 to 19,660 — Twitter among the casualties.
 
 A CUSIP with several tickers is a share class or a dual listing, and
 `resolveHoldingTickers` takes the first pair you give it. Pass them in the
-order you trust.
+order you trust — but order alone is not enough, and two traps cost real
+correctness:
+
+- **Both sources emit Bloomberg composite tickers, `SYM EXCH`.** Do not strip
+  the suffix. `CCO CN` is Cameco on Toronto; bare `CCO` is Clear Channel
+  Outdoor in the US. Stripping maps a CUSIP onto a different company's prices,
+  which then joins cleanly and looks right. Reject a foreign listing instead:
+  a null ticker is recoverable where a wrong one is not.
+- **Funds type the CUSIP prefix into the ticker field for bonds**, so
+  `02090DAA6` "resolves" to `02090DAA`. It joins to nothing and reads as a
+  real mapping.
+
+Measured over 70,641 CUSIPs, the two sources disagree on 2,421 (3.43%). Where
+they do and you hold prices, the price table settles it rather than the
+precedence: on that set the preferred source was right 966 times and the other
+514, so neither order is correct on its own.
 
 Full detail, with how each number was produced: [METHODOLOGY.md](./METHODOLOGY.md).
 
