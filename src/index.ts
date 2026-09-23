@@ -10,6 +10,7 @@ export * from "./sources/thirteenFDatasets";
 export * from "./sources/form345Datasets";
 export * from "./sources/edgarDaily";
 export * from "./extraction/infoTable";
+export * from "./extraction/thirteenFValueUnits";
 export * from "./extraction/tsv";
 export * from "./lake/holdingsTables";
 export * from "./lake/holdingsShardRows";

@@ -31,8 +31,15 @@ export interface ThirteenFFilingRow {
 /**
  * One holdings row. `cusip` is normalized (no spaces, uppercase) but never
  * resolved to a ticker here — mapping is the milestone-3 CUSIP job, and
- * `figi` is only ~12% filled at source. `value` is as reported, in thousands
- * of USD per the FORM13F readme.
+ * `figi` is only ~12% filled at source in recent windows and EMPTY before 2024,
+ * so it cannot bridge to a ticker across the history.
+ *
+ * **`value` is as reported, and the source changes units mid-history.** SEC's
+ * 2022 Form 13F amendments switched the information table from thousands of USD
+ * to whole USD for filings from 2023-01-01, and the column carries no unit, so
+ * summing it across the full history adds the two together. This row keeps the
+ * filed number; `normalizeThirteenFValuesToDollars` converts a parsed dataset
+ * to whole dollars when a consumer needs one comparable unit.
  */
 export interface ThirteenFHoldingRow {
   accession: string;

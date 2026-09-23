@@ -1,6 +1,6 @@
 {
   "name": "sec-ownership-disclosures",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Build a queryable lake of SEC ownership disclosures: insider Form 3/4/5 transactions and institutional 13F/13D/13G holdings, from official EDGAR sources.",
   "keywords": [
     "sec",

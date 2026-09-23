@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.2.0
+
+### The 13F `value` column changes units mid-history
+
+SEC's 2022 Form 13F amendments switched the information table from reporting
+value in **thousands of USD** to **whole USD**, for filings from 2023-01-01. The
+column carries no unit, so `SUM(value)` across the full history adds the two
+together and inflates everything from 2023 onward by 1000x against everything
+before it.
+
+Measured as median implied price per share (`value / sharesAmount`, SH rows, no
+option leg), which is only plausible under one convention at a time:
+
+```
+filing month   under dollars   under thousands
+2022-11              0.0478            47.80
+2022-12              0.0773            77.30
+2023-01             36.9710         36971.00
+```
+
+The cutover keys on **`filingDate`, not `periodOfReport`** — Q4-2022 holdings
+were filed in January and February 2023 under the new rule, so a period-keyed
+split mis-scales an entire quarter.
+
+- **Added** `normalizeThirteenFValuesToDollars(rows)` and
+  `reportsValueInThousands(filingDate)`. Parsed rows still carry the filed
+  number; this converts a dataset to one comparable unit when a consumer needs
+  it. It is deliberately **not idempotent** — a second pass scales by a million
+  — so it runs once per parse of a raw archive, never against rows read back
+  from a published table.
+- **Fixed** the docs, which asserted `value` was "in thousands of USD" without
+  qualification. That claim was true only before 2023 and is what the error
+  propagated from.
+- **Fixed** the FIGI claim: it is not "~4% filled", it is **empty before 2024**
+  and only appears after the 2023 amendments made it an optional column. Those
+  are different facts for anyone planning to join on it.
+
+
 All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
