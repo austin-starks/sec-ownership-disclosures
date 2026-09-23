@@ -45,6 +45,43 @@ export interface SecOwnershipDatasetSnapshot {
   tables: Partial<Record<SecOwnershipTable, DatasetTable>>;
 }
 
+export interface SelectedDatasetFile {
+  table: SecOwnershipTable;
+  year: number;
+  file: DatasetFile;
+}
+
+export interface DatasetSelection {
+  table?: SecOwnershipTable | undefined;
+  year?: number | undefined;
+}
+
+/**
+ * The files a `--table` / `--year` selection covers.
+ *
+ * Shared deliberately. The download narrowed by this filter while the SQLite
+ * build walked the whole snapshot, so `download --table insider_transactions
+ * --year 2024 --sqlite` fetched one file and then died reading
+ * `insider_filings/2006.parquet`, which it had never asked for. One selector,
+ * both callers, and the two cannot disagree again.
+ */
+export function selectDatasetFiles(
+  snapshot: SecOwnershipDatasetSnapshot,
+  selection: DatasetSelection = {},
+): SelectedDatasetFile[] {
+  const selected: SelectedDatasetFile[] = [];
+  for (const [name, entry] of Object.entries(snapshot.tables)) {
+    if (selection.table && name !== selection.table) continue;
+    for (const manifest of entry!.manifests) {
+      if (selection.year !== undefined && manifest.year !== selection.year) continue;
+      for (const file of manifest.files) {
+        selected.push({ table: name as SecOwnershipTable, year: manifest.year, file });
+      }
+    }
+  }
+  return selected;
+}
+
 export interface DatasetDownloadPlan {
   destination: string;
   files: number;
@@ -222,14 +259,9 @@ export async function downloadSecOwnershipDataset(
   const snapshot = parseSecOwnershipDatasetSnapshot(JSON.parse(await snapshotResponse.text()));
   await onSnapshot?.(snapshot);
 
-  const wanted: DatasetFile[] = [];
-  for (const [name, entry] of Object.entries(snapshot.tables)) {
-    if (table && name !== table) continue;
-    for (const manifest of entry!.manifests) {
-      if (year !== undefined && manifest.year !== year) continue;
-      wanted.push(...manifest.files);
-    }
-  }
+  const wanted: DatasetFile[] = selectDatasetFiles(snapshot, { table, year }).map(
+    (entry) => entry.file,
+  );
   if (wanted.length === 0) {
     throw new Error(
       `the snapshot has no files for ${table ?? "any table"}${year === undefined ? "" : ` in ${year}`}`

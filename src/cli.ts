@@ -95,6 +95,9 @@ async function download(): Promise<void> {
     datasetDirectory: result.destination,
     databasePath,
     snapshot: result.snapshot,
+    // The same narrowing the download just used, so the build reads the files
+    // that were actually fetched rather than every file in the snapshot.
+    selection: { table, year },
     onProgress: (message) => process.stdout.write(`\r  ${message.padEnd(60)}`),
   });
   const rows = built.tables.map((entry) => `${entry.table} ${entry.rows.toLocaleString("en-US")}`).join(" · ");

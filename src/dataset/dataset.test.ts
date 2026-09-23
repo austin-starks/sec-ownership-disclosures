@@ -6,6 +6,7 @@ import { join } from "node:path";
 import {
   downloadSecOwnershipDataset,
   parseSecOwnershipDatasetSnapshot,
+  selectDatasetFiles,
 } from "./download";
 import { materializeSecOwnershipSqlite } from "./sqlite";
 
@@ -164,5 +165,122 @@ describe("materializeSecOwnershipSqlite", () => {
     } finally {
       db.close();
     }
+  });
+});
+
+describe("a filtered download and the database built from it", () => {
+  /**
+   * Two tables and two years, so a selection can be wrong in a way that shows.
+   * Only `insider_transactions/2024` exists on disk — the shape a real
+   * `--table insider_transactions --year 2024` download leaves behind.
+   */
+  const partialSnapshot = {
+    schemaVersion: 1,
+    dataset: "austin-starks/sec-ownership-disclosures",
+    generatedAt: "2026-09-23T00:00:00.000Z",
+    totals: { insider_transactions: 2, insider_filings: 1 },
+    tables: {
+      insider_filings: {
+        rows: 1,
+        years: [2006],
+        manifests: [
+          {
+            year: 2006,
+            files: [
+              {
+                publicPath: "data/insider_filings/2006.parquet",
+                size: 1,
+                sha256: "a".repeat(64),
+              },
+            ],
+          },
+        ],
+      },
+      insider_transactions: {
+        rows: 2,
+        years: [2023, 2024],
+        manifests: [
+          {
+            year: 2023,
+            files: [
+              {
+                publicPath: "data/insider_transactions/2023.parquet",
+                size: 1,
+                sha256: "b".repeat(64),
+              },
+            ],
+          },
+          {
+            year: 2024,
+            files: [
+              {
+                publicPath: "data/insider_transactions/2024.parquet",
+                size: 1,
+                sha256: "c".repeat(64),
+              },
+            ],
+          },
+        ],
+      },
+    },
+  } as never;
+
+  it("selects exactly the files a table-and-year narrowing covers", () => {
+    const selected = selectDatasetFiles(partialSnapshot, {
+      table: "insider_transactions",
+      year: 2024,
+    });
+    expect(selected.map((entry) => entry.file.publicPath)).toEqual([
+      "data/insider_transactions/2024.parquet",
+    ]);
+  });
+
+  it("selects everything when nothing is narrowed", () => {
+    expect(selectDatasetFiles(partialSnapshot)).toHaveLength(3);
+  });
+
+  it("builds the database from the files fetched, not the whole snapshot", async () => {
+    // The regression: `download --table insider_transactions --year 2024
+    // --sqlite` fetched one file, then the build walked every table in the
+    // snapshot and died on `insider_filings/2006.parquet`, which it had never
+    // asked for. Caught against the live dataset the first time a stranger's
+    // command was run end to end.
+    const datasetDirectory = await mkdtemp(join(tmpdir(), "sec-sqlite-partial-"));
+    await mkdir(join(datasetDirectory, "data/insider_transactions"), { recursive: true });
+    await writeFile(
+      join(datasetDirectory, "data/insider_transactions/2024.parquet"),
+      "stub",
+    );
+
+    const read: string[] = [];
+    const built = await materializeSecOwnershipSqlite({
+      datasetDirectory,
+      databasePath: join(datasetDirectory, "out.db"),
+      snapshot: partialSnapshot,
+      selection: { table: "insider_transactions", year: 2024 },
+      readParquetFile: async (path) => {
+        read.push(path);
+        return TRANSACTIONS;
+      },
+    });
+
+    expect(read).toHaveLength(1);
+    expect(read[0]).toContain("insider_transactions/2024.parquet");
+    expect(built.tables).toEqual([{ table: "insider_transactions", rows: 2 }]);
+  });
+
+  it("still fails loudly when a selected file is absent", async () => {
+    // A truncated download must not quietly produce a database that looks
+    // complete; skipping what is missing would hide exactly that.
+    const datasetDirectory = await mkdtemp(join(tmpdir(), "sec-sqlite-missing-"));
+
+    await expect(
+      materializeSecOwnershipSqlite({
+        datasetDirectory,
+        databasePath: join(datasetDirectory, "out.db"),
+        snapshot: partialSnapshot,
+        selection: { table: "insider_transactions", year: 2024 },
+      }),
+    ).rejects.toThrow();
   });
 });

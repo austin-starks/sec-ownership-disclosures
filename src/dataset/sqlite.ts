@@ -10,12 +10,24 @@
 import { mkdir, rename, stat, unlink } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
-import type { SecOwnershipDatasetSnapshot, SecOwnershipTable } from "./download";
+import { selectDatasetFiles } from "./download";
+import type {
+  DatasetFile,
+  DatasetSelection,
+  SecOwnershipDatasetSnapshot,
+  SecOwnershipTable,
+} from "./download";
 
 export interface MaterializeSecOwnershipSqliteOptions {
   datasetDirectory: string;
   databasePath: string;
   snapshot: SecOwnershipDatasetSnapshot;
+  /**
+   * The same narrowing the download used. Omit it only when the whole dataset
+   * is on disk — a build that walks the full snapshot after a filtered
+   * download reads a file that was never fetched and dies partway through.
+   */
+  selection?: DatasetSelection;
   /** Overridable for tests, so the suite never needs a real Parquet file. */
   readParquetFile?: (path: string) => Promise<readonly Record<string, unknown>[]>;
   onProgress?: (message: string) => void;
@@ -111,9 +123,15 @@ export async function materializeSecOwnershipSqlite(
     db.exec("PRAGMA journal_mode = WAL");
     db.exec("PRAGMA synchronous = OFF");
 
-    for (const [name, entry] of Object.entries(options.snapshot.tables)) {
-      const table = name as SecOwnershipTable;
-      const files = entry!.manifests.flatMap((manifest) => manifest.files);
+    const selected = selectDatasetFiles(options.snapshot, options.selection ?? {});
+    const byTable = new Map<SecOwnershipTable, DatasetFile[]>();
+    for (const entry of selected) {
+      const bucket = byTable.get(entry.table) ?? [];
+      bucket.push(entry.file);
+      byTable.set(entry.table, bucket);
+    }
+
+    for (const [table, files] of byTable) {
       if (files.length === 0) continue;
 
       let columns: string[] | null = null;
