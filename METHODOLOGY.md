@@ -6,10 +6,14 @@ after validation — numbers below are measured, not estimated.
 
 ## Sources (all official SEC EDGAR)
 
-- Insider: quarterly Form 3/4/5 data sets,
-  `sec.gov/files/structureddata/data/insider-transactions-data-sets/{YYYY}q{N}_form345.zip`,
-  2006Q1–2026Q1 (2026Q2 unpublished at last pass; walk-forward 404 is the
-  stop signal). Plus the EDGAR daily form index + per-filing XML for
+- Insider: quarterly Form 3/4/5 data sets, 2006Q1–2026Q2, from **two** paths.
+  SEC moved this publication from `/files/structureddata/` to
+  `/files/datastandardsinnovation/` starting at 2026Q2 and left every earlier
+  quarter on the old path, so neither is a superset and **a 404 on one path is
+  not a stop signal**. This file previously recorded "2026Q2 unpublished at last
+  pass; walk-forward 404 is the stop signal" — that inference was wrong, SEC's
+  landing page linked 2026Q2 the whole time, and the lake was missing April
+  through August 2026 because of it. Plus the EDGAR daily form index + per-filing XML for
   freshness (not yet backfilled — quarterly sets lag up to a quarter).
 - Institutional: quarterly Form 13F data sets, 2013Q2–present, 54 windows.
   Two naming eras coexist: classic `{YYYY}q{N}_form13f.zip` and
@@ -22,7 +26,7 @@ after validation — numbers below are measured, not estimated.
 - `insider_filings`: one row per filing × reporting owner (joint filings
   produce one row per owner; count filings with `COUNT(DISTINCT accession)`).
 - `insider_transactions`: one row per non-derivative/derivative leg,
-  keyed by accession + row SK. 9,923,755 rows across 4,772,838 filings.
+  keyed by accession + row SK. 10,045,180 rows across 4,839,497 filings.
 - `institutional_filings`: one row per 13F submission (HR, HR/A, NT, NT/A).
 - `institutional_holdings`: one row per information-table leg, keyed by
   accession + INFOTABLE_SK. 124,012,468 rows across 409,685 filings.
@@ -62,8 +66,11 @@ report; unknown codes surface there, never silently.
   kept verbatim.
 - 2,870 insider transactions are dated after their filing date (0.03%);
   8,187 have null shares; 15 rows have no transaction code. Kept, flagged.
-- FIGI is 3.7% filled overall (12% in the latest window): CUSIP→ticker
-  mapping is the remaining workload, not yet built.
+- **FIGI is empty before 2024**, not thinly spread. Per-year fill measured on
+  the published table is `0.000000000000` for 2013–2023; the 24,004 CUSIPs
+  carrying one are 2024+, after the 2023 amendments made it an optional column.
+  An aggregate "3.7% overall" hid that shape. CUSIP→ticker mapping is the
+  remaining workload, not yet built.
 - 13F value is as-reported in thousands of USD (FORM13F readme); shares are
   as-reported counts.
 - Classic quarters and acceptance windows are disjoint accession sets

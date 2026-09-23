@@ -36,8 +36,8 @@ A full backfill of the official sources produces:
 
 | Table | Rows | Grain | Coverage |
 |---|---|---|---|
-| `insider_transactions` | 9,923,755 | one non-derivative/derivative leg | 2006Q1–2026Q1 |
-| `insider_filings` | 4,772,838 | one filing × reporting owner | 2006Q1–2026Q1 |
+| `insider_transactions` | 10,045,180 | one non-derivative/derivative leg | 2006Q1–2026Q2 |
+| `insider_filings` | 4,839,497 | one filing × reporting owner | 2006Q1–2026Q2 |
 | `institutional_holdings` | 124,012,468 | one information-table leg | 2013Q2–present |
 | `institutional_filings` | 409,685 | one 13F submission | 2013Q2–present |
 
@@ -46,7 +46,8 @@ Twenty years of Form 3/4/5, from 81 quarterly data sets, plus 54 windows of 13F.
 ## What you can investigate
 
 - **Which officers bought their own stock with their own money**, as opposed to
-  receiving it. Of 9.9M insider legs, only **894,244 are open-market purchases**
+  receiving it. Measured over the 9,923,755-leg build, only **894,244 are
+  open-market purchases**
   (`transactionCode = 'P'`). Grants are 2.48M, option exercises 1.96M and sales
   2.60M. A dataset that calls all of those "insider buying" is measuring
   compensation, not conviction.
@@ -198,8 +199,13 @@ the two eras were verified to be disjoint accession sets (409,685 distinct of
   anomaly class rather than filtered into invisibility.
 - 2,870 insider transactions are dated after their filing date (0.03%), 8,187
   have null share counts, and 15 have no transaction code. Kept and flagged.
-- FIGI is 3.7% filled overall (12% in the latest window). CUSIP→ticker mapping
-  is the remaining work, and the package does not pretend otherwise.
+- **FIGI is empty before 2024.** Measured per year against the published table,
+  the fill rate is `0.000000000000` for every year from 2013 through 2023, and
+  the 24,004 CUSIPs that carry one are all 2024 or later — FIGI became an
+  optional 13F column in the 2023 amendments. The "3.7% overall" figure this
+  file used to quote was arithmetically true and read as thinly spread, when it
+  is in fact *absent for eleven of fourteen years*. CUSIP→ticker mapping is the
+  remaining work, and the package does not pretend otherwise.
 
 Full detail, with how each number was produced: [METHODOLOGY.md](./METHODOLOGY.md).
 
