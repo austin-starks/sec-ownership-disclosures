@@ -82,7 +82,7 @@ describe("normalizeThirteenFValuesToDollars", () => {
 
     expect(rows.holdings[0]!.value).toBe(1_234_000);
     expect(rows.holdings[1]!.value).toBe(1_234_000);
-    expect(report).toEqual({ scaled: 1, untouched: 1, unresolvedFilingDate: 0 });
+    expect(report).toMatchObject({ scaled: 1, untouched: 1, unresolvedFilingDate: 0 });
   });
 
   it("keys on the FILING date, so Q4-2022 holdings filed in 2023 stay in dollars", () => {
@@ -125,5 +125,102 @@ describe("normalizeThirteenFValuesToDollars", () => {
 
     normalizeThirteenFValuesToDollars(rows);
     expect(rows.holdings[0]!.value).toBe(7_000_000);
+  });
+});
+
+describe("the filing decides its own unit, with the date as a prior", () => {
+  function shares(accession: string, value: number, sharesAmount: number) {
+    return { ...holding(accession, value), sharesAmount, sharesType: "SH", putCall: null };
+  }
+
+  it("overrides a pre-2023 date when the filing is plainly already in dollars", () => {
+    // The 2013-12-09 case: a filer reporting whole dollars a decade early.
+    // Scaling would have implied $170,400,000 a share for Berkshire A.
+    const rows = dataset(
+      [filing("UBS", "2013-12-09")],
+      [
+        shares("UBS", 170_000_000, 1_000),
+        shares("UBS", 50_000_000, 1_000_000),
+        shares("UBS", 20_000_000, 400_000),
+        shares("UBS", 9_000_000, 300_000),
+        shares("UBS", 4_000_000, 100_000),
+      ],
+    );
+
+    const report = normalizeThirteenFValuesToDollars(rows);
+
+    expect(rows.holdings[0]!.value).toBe(170_000_000);
+    expect(report.scaled).toBe(0);
+    expect(report.overrodeDate).toBe(1);
+  });
+
+  it("overrides a post-2023 date when the filing is plainly still in thousands", () => {
+    // The mirror case, 9,802 filings of it, which nothing was looking for.
+    const rows = dataset(
+      [filing("LATE", "2024-05-15")],
+      [
+        shares("LATE", 50, 1_000),
+        shares("LATE", 120, 2_000),
+        shares("LATE", 33, 700),
+        shares("LATE", 88, 1_500),
+        shares("LATE", 41, 900),
+      ],
+    );
+
+    const report = normalizeThirteenFValuesToDollars(rows);
+
+    expect(rows.holdings[0]!.value).toBe(50_000);
+    expect(report.scaled).toBe(5);
+    expect(report.overrodeDate).toBe(1);
+  });
+
+  it("leaves an ordinary filing alone rather than second-guessing it", () => {
+    // Median implied ~$50 a share as filed under the thousands convention is
+    // 0.05, comfortably inside the band, so the date stands.
+    const rows = dataset(
+      [filing("NORMAL", "2019-08-14")],
+      [
+        shares("NORMAL", 50, 1_000),
+        shares("NORMAL", 75, 1_500),
+        shares("NORMAL", 30, 600),
+        shares("NORMAL", 90, 1_800),
+        shares("NORMAL", 45, 900),
+      ],
+    );
+
+    const report = normalizeThirteenFValuesToDollars(rows);
+
+    expect(report.scaled).toBe(5);
+    expect(report.overrodeDate).toBe(0);
+  });
+
+  it("falls back to the date when a filing has too few share rows to judge", () => {
+    // All-bond or all-option filings carry no share count to reason from.
+    const rows = dataset([filing("BONDS", "2019-08-14")], [holding("BONDS", 1_234)]);
+
+    const report = normalizeThirteenFValuesToDollars(rows);
+
+    expect(rows.holdings[0]!.value).toBe(1_234_000);
+    expect(report.decidedByDateAlone).toBe(1);
+    expect(report.overrodeDate).toBe(0);
+  });
+
+  it("does not let one penny stock flip a filing, because the median decides", () => {
+    // A single sub-$1 holding in an otherwise ordinary dollars-era filing.
+    const rows = dataset(
+      [filing("PENNY", "2024-05-15")],
+      [
+        shares("PENNY", 0.4, 1_000),
+        shares("PENNY", 50_000, 1_000),
+        shares("PENNY", 75_000, 1_500),
+        shares("PENNY", 30_000, 600),
+        shares("PENNY", 90_000, 1_800),
+      ],
+    );
+
+    const report = normalizeThirteenFValuesToDollars(rows);
+
+    expect(report.scaled).toBe(0);
+    expect(report.overrodeDate).toBe(0);
   });
 });
