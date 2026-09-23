@@ -1,11 +1,11 @@
 import type { ThirteenFDatasetRows, ThirteenFHoldingRow } from "./infoTable";
 import { resolveHoldingTickers } from "./resolveHoldingTickers";
 
-function holding(cusip: string): ThirteenFHoldingRow {
+function holding(cusip: string, availableAt: string): ThirteenFHoldingRow {
   return {
     accession: "A",
-    infoTableSk: `${cusip}-1`,
-    availableAt: new Date("2025-01-01T00:00:00.000Z"),
+    infoTableSk: `${cusip}-${availableAt}`,
+    availableAt: new Date(`${availableAt}T00:00:00.000Z`),
     availabilitySource: "test",
     issuerName: null,
     titleOfClass: null,
@@ -26,34 +26,68 @@ function holding(cusip: string): ThirteenFHoldingRow {
   };
 }
 
-function dataset(cusips: string[]): ThirteenFDatasetRows {
-  return { filings: [], holdings: cusips.map(holding) };
+function dataset(holdings: ThirteenFHoldingRow[]): ThirteenFDatasetRows {
+  return { filings: [], holdings };
 }
 
 describe("resolveHoldingTickers", () => {
   it("stamps the ticker and counts what it could not resolve", () => {
-    const rows = dataset(["037833100", "999999999"]);
+    const rows = dataset([holding("037833100", "2025-02-14"), holding("999999999", "2025-02-14")]);
 
     const report = resolveHoldingTickers(rows, [{ cusip: "037833100", ticker: "AAPL" }]);
 
     expect(rows.holdings[0]!.resolvedTicker).toBe("AAPL");
     expect(rows.holdings[1]!.resolvedTicker).toBeNull();
-    expect(report).toEqual({ resolved: 1, unresolved: 1, unresolvedCusips: 1 });
+    expect(report).toEqual({ resolved: 1, unresolved: 1, unresolvedCusips: 1, outsideEverySpan: 0 });
   });
 
   it("matches regardless of case or padding, because filings are not consistent", () => {
-    const rows = dataset([" 037833100 "]);
+    const rows = dataset([holding(" 037833100 ", "2025-02-14")]);
 
     resolveHoldingTickers(rows, [{ cusip: "037833100", ticker: "aapl" }]);
 
     expect(rows.holdings[0]!.resolvedTicker).toBe("AAPL");
   });
 
-  it("takes the FIRST pair for a CUSIP, so caller order decides a share class", () => {
-    // Several tickers on one CUSIP is a share class or a dual listing. The
-    // package cannot know which the caller wants; it documents that the first
-    // wins rather than picking by sort order.
-    const rows = dataset(["037833100"]);
+  it("gives a row the symbol its security traded under ON ITS OWN DATE", () => {
+    // The whole reason spans exist: Facebook is FB until 2022-06-09 and META
+    // after. A 2013 row stamped META joins to nothing.
+    const spans = [
+      { cusip: "30303M102", ticker: "FB", fromDate: "2012-05-18", toDate: "2022-06-08" },
+      { cusip: "30303M102", ticker: "META", fromDate: "2022-06-09", toDate: null },
+    ];
+    const rows = dataset([holding("30303M102", "2013-08-14"), holding("30303M102", "2024-02-14")]);
+
+    resolveHoldingTickers(rows, spans);
+
+    expect(rows.holdings[0]!.resolvedTicker).toBe("FB");
+    expect(rows.holdings[1]!.resolvedTicker).toBe("META");
+  });
+
+  it("resolves to NULL outside every span rather than reaching for the nearest", () => {
+    // A reused symbol belongs to another company before its current holder
+    // listed, so the nearest span is the wrong answer, not an approximation.
+    const rows = dataset([holding("30303M102", "2010-01-04")]);
+
+    const report = resolveHoldingTickers(rows, [
+      { cusip: "30303M102", ticker: "FB", fromDate: "2012-05-18", toDate: "2022-06-08" },
+    ]);
+
+    expect(rows.holdings[0]!.resolvedTicker).toBeNull();
+    expect(report.outsideEverySpan).toBe(1);
+    expect(report.unresolvedCusips).toBe(0);
+  });
+
+  it("treats an undated pair as always applying, for symbols that never moved", () => {
+    const rows = dataset([holding("037833100", "2013-08-14")]);
+
+    resolveHoldingTickers(rows, [{ cusip: "037833100", ticker: "AAPL" }]);
+
+    expect(rows.holdings[0]!.resolvedTicker).toBe("AAPL");
+  });
+
+  it("takes the FIRST covering span, so caller order decides a share class", () => {
+    const rows = dataset([holding("037833100", "2025-02-14")]);
 
     resolveHoldingTickers(rows, [
       { cusip: "037833100", ticker: "AAPL" },
@@ -64,9 +98,11 @@ describe("resolveHoldingTickers", () => {
   });
 
   it("counts DISTINCT unresolved CUSIPs, not unresolved rows", () => {
-    // A manager holding one unmapped security across ten rows is one gap to
-    // chase, not ten.
-    const rows = dataset(["999999999", "999999999", "888888888"]);
+    const rows = dataset([
+      holding("999999999", "2025-02-14"),
+      holding("999999999", "2025-05-14"),
+      holding("888888888", "2025-02-14"),
+    ]);
 
     const report = resolveHoldingTickers(rows, []);
 
@@ -75,7 +111,7 @@ describe("resolveHoldingTickers", () => {
   });
 
   it("clears a stale ticker rather than leaving a previous pass's value", () => {
-    const rows = dataset(["999999999"]);
+    const rows = dataset([holding("999999999", "2025-02-14")]);
     rows.holdings[0]!.resolvedTicker = "WRONG";
 
     resolveHoldingTickers(rows, []);

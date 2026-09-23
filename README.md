@@ -258,10 +258,26 @@ so; it will not silently download the whole archive.
 which is most of what a fourteen-year 13F history holds. It cut the mapped set
 from 53,468 to 19,660 — Twitter among the casualties.
 
-A CUSIP with several tickers is a share class or a dual listing, and
-`resolveHoldingTickers` takes the first pair you give it. Pass them in the
-order you trust — but order alone is not enough, and two traps cost real
-correctness:
+**Pass spans, not pairs.** `resolveHoldingTickers` matches each holding on its
+own `availableAt`, because price history is keyed by the symbol as traded on
+that date:
+
+```ts
+resolveHoldingTickers(rows, [
+  { cusip: "30303M102", ticker: "FB",   fromDate: "2012-05-18", toDate: "2022-06-08" },
+  { cusip: "30303M102", ticker: "META", fromDate: "2022-06-09", toDate: null },
+]);
+```
+
+An undated pair applies to every date, which is only safe for a symbol that has
+never changed hands. Measured against SEC's own history, an undated crosswalk
+stamps the wrong symbol on **10.68%** of holdings rows: renames make the join
+miss, and a reused symbol makes it succeed against a different company. A CUSIP
+with no covering span resolves to null on purpose — a null is visible, a wrong
+ticker is not.
+
+Where several spans cover one day the first wins, so pass them in the order you
+trust. Order alone is not enough, and three traps cost real correctness:
 
 - **Both sources emit Bloomberg composite tickers, `SYM EXCH`.** Do not strip
   the suffix. `CCO CN` is Cameco on Toronto; bare `CCO` is Clear Channel
@@ -271,6 +287,11 @@ correctness:
 - **Funds type the CUSIP prefix into the ticker field for bonds**, so
   `02090DAA6` "resolves" to `02090DAA`. It joins to nothing and reads as a
   real mapping.
+- **OpenFIGI's `tickers[0]` is a foreign venue symbol when `usTicker` is null** —
+  `NLYEUR` for Annaly, `AMNBUSD` for American National Bankshares. Do not strip
+  the currency either: `STWD`, `ACAD` and `CBRL` all parse as symbol-plus-
+  currency and are real US tickers. Validate against a listing table; a pattern
+  cannot tell these apart.
 
 Measured over 70,641 CUSIPs, the two sources disagree on 2,421 (3.43%). Where
 they do and you hold prices, the price table settles it rather than the

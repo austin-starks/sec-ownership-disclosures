@@ -59,7 +59,14 @@ export interface ThirteenFHoldingRow {
   votingSole: number | null;
   votingShared: number | null;
   votingNone: number | null;
-  /** Ticker for `cusip`, resolved by the crosswalk. Null when nothing resolved it. */
+  /**
+   * The ticker this security traded under AT `availableAt`, not today's.
+   * Price history is keyed by the symbol as traded on each date, so an undated
+   * mapping stamps a 2013 row with a 2026 symbol: the join then misses after a
+   * rename, or worse, succeeds against whoever else used that symbol. Null
+   * when no span covers the date — a null is visible where a wrong ticker is
+   * indistinguishable from correct data.
+   */
   resolvedTicker: string | null;
   /**
    * Which evidence decided `value`'s unit: `price` (a real close), `median`
