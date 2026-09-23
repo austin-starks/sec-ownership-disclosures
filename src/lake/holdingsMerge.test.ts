@@ -20,7 +20,7 @@ describe("mergeHoldingsRows", () => {
           availabilitySource: "sec_13f_quarterly_dataset", issuerName: "X", titleOfClass: "COM",
           cusip: "111", figi: null, value: 1, sharesAmount: 1, sharesType: "SH", putCall: null,
           discretion: "SOLE", otherManager: null, votingSole: 1, votingShared: 0, votingNone: 0,
-          rawArchiveKey: "k",
+          resolvedTicker: null, valueUnitSource: null, rawArchiveKey: "k",
         },
       ],
     };

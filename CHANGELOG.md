@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.3.0
+
+### The package can now resolve tickers itself
+
+13F holdings are keyed by CUSIP and the form carries no ticker, so a lake built
+from this package could not be joined to prices, screened, or used in a
+strategy. Everything needed to close that gap lived in a private pipeline;
+now it is here.
+
+- **Added** `resolvedTicker` and `valueUnitSource` to `institutional_holdings`.
+- **Added** `sources/nportDatasets` — SEC's Form N-PORT data sets, the public
+  bulk source that pairs a CUSIP with a ticker, because registered funds report
+  both. Reads the ZIP central directory from a byte range and pulls only the two
+  members it needs, so a 440 MB archive costs neither the download nor the
+  memory.
+- **Added** `extraction/cusipTickerCrosswalk` — folds N-PORT's identifier rows
+  per holding and cross-checks each CUSIP against the ISIN that contains it.
+- **Added** `sources/openFigiClient` — OpenFIGI mapping for CUSIPs no fund
+  holds. Do NOT pin `exchCode: "US"`: a delisted security has no US venue row,
+  so it silently returns nothing for exactly the names that need resolving.
+- **Added** `SecHttp.getRange`, optional, for archives too large to hold whole.
+
+### `valueUnitSource` makes uncertainty explicit
+
+Which evidence decided a row's unit, strongest first:
+
+| value | evidence |
+|---|---|
+| `price` | the security's actual close on the period-end date |
+| `median` | the filing's own median implied price |
+| `date` | SEC's rule alone, which filers break in both directions |
+| `unknown` | undetermined — do not trust this row's dollar value |
+
+Prices are looked up on **`periodOfReport`**, not `filingDate`: a 13F values its
+holdings as of the period end and is filed 30-45 days later.
+
+
 ## 0.2.0
 
 ### The 13F `value` column changes units mid-history

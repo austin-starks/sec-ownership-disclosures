@@ -40,6 +40,8 @@ function holding(overrides: Partial<ThirteenFHoldingRow> = {}): ThirteenFHolding
     votingSole: 6864,
     votingShared: 0,
     votingNone: 0,
+    resolvedTicker: null,
+    valueUnitSource: null,
     rawArchiveKey: "k",
     ...overrides,
   };

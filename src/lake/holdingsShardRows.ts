@@ -43,6 +43,8 @@ export function institutionalHoldingFromShard(raw: Record<string, unknown>): Thi
     votingSole: row.numberOrNull("votingSole"),
     votingShared: row.numberOrNull("votingShared"),
     votingNone: row.numberOrNull("votingNone"),
+    resolvedTicker: row.textOrNull("resolvedTicker"),
+    valueUnitSource: row.textOrNull("valueUnitSource"),
     rawArchiveKey: row.text("rawArchiveKey"),
   };
 }

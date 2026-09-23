@@ -59,6 +59,14 @@ export interface ThirteenFHoldingRow {
   votingSole: number | null;
   votingShared: number | null;
   votingNone: number | null;
+  /** Ticker for `cusip`, resolved by the crosswalk. Null when nothing resolved it. */
+  resolvedTicker: string | null;
+  /**
+   * Which evidence decided `value`'s unit: `price` (a real close), `median`
+   * (the filing's own implied price), `date` (SEC's rule alone), or `unknown`.
+   * Published so a consumer can exclude what we could not settle.
+   */
+  valueUnitSource: string | null;
   rawArchiveKey: string;
 }
 
@@ -188,6 +196,10 @@ export async function parseThirteenFDataset(zip: Buffer, rawArchiveKey: string):
       votingSole: numeric(record.VOTING_AUTH_SOLE, `${context} VOTING_AUTH_SOLE`),
       votingShared: numeric(record.VOTING_AUTH_SHARED, `${context} VOTING_AUTH_SHARED`),
       votingNone: numeric(record.VOTING_AUTH_NONE, `${context} VOTING_AUTH_NONE`),
+      // Filled by later passes, never by the filing: the crosswalk resolves the
+      // ticker and the unit rule records how it decided.
+      resolvedTicker: null,
+      valueUnitSource: null,
       rawArchiveKey,
     };
   });

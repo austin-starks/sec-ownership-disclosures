@@ -37,6 +37,8 @@ const HOLDING: ThirteenFHoldingRow = {
   votingSole: 0,
   votingShared: 0,
   votingNone: 0,
+  resolvedTicker: null,
+  valueUnitSource: null,
   rawArchiveKey: "k",
 };
 

@@ -49,6 +49,8 @@ export const THIRTEEN_F_HOLDINGS_COLUMNS: Readonly<Record<keyof ThirteenFHolding
   votingSole: "DOUBLE",
   votingShared: "DOUBLE",
   votingNone: "DOUBLE",
+  resolvedTicker: "VARCHAR",
+  valueUnitSource: "VARCHAR",
   rawArchiveKey: "VARCHAR",
 };
 
