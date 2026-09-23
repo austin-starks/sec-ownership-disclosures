@@ -100,6 +100,7 @@ export function normalizeThirteenFValuesToDollars(
   }
 
   const scaleByAccession = new Map<string, boolean>();
+  const sourceByAccession = new Map<string, string>();
   for (const [accession, filingDate] of filingDates) {
     const byDate = reportsValueInThousands(filingDate);
     const prices = impliedPrices.get(accession) ?? [];
@@ -108,6 +109,7 @@ export function normalizeThirteenFValuesToDollars(
     if (implied === null) {
       report.decidedByDateAlone += 1;
       scaleByAccession.set(accession, byDate);
+      sourceByAccession.set(accession, "date");
       continue;
     }
     // The data speaks only when the date's answer would be absurd.
@@ -116,15 +118,18 @@ export function normalizeThirteenFValuesToDollars(
       : implied < IMPLAUSIBLE_IF_DOLLARS;
     if (contradicted) report.overrodeDate += 1;
     scaleByAccession.set(accession, contradicted ? !byDate : byDate);
+    sourceByAccession.set(accession, "median");
   }
 
   for (const holding of rows.holdings as ThirteenFHoldingRow[]) {
     if (holding.value === null || holding.value === undefined) continue;
     const scale = scaleByAccession.get(holding.accession);
     if (scale === undefined) {
+      holding.valueUnitSource = "unknown";
       report.unresolvedFilingDate += 1;
       continue;
     }
+    holding.valueUnitSource = sourceByAccession.get(holding.accession) ?? "unknown";
     if (scale) {
       holding.value = holding.value * THOUSANDS_TO_DOLLARS;
       report.scaled += 1;

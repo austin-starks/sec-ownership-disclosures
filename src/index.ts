@@ -13,6 +13,7 @@ export * from "./sources/edgarDaily";
 export * from "./extraction/infoTable";
 export * from "./extraction/thirteenFValueUnits";
 export * from "./extraction/cusipTickerCrosswalk";
+export * from "./extraction/resolveHoldingTickers";
 export * from "./extraction/tsv";
 export * from "./lake/holdingsTables";
 export * from "./lake/holdingsShardRows";
