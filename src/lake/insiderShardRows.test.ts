@@ -12,6 +12,7 @@ const FILING: InsiderFilingRow = {
   issuerCik: "0001304492",
   issuerName: "Anterix Inc.",
   issuerTicker: "ATEX",
+  resolvedTicker: "ATEX",
   ownerCik: "0001669943",
   ownerName: "Ashe Gena L",
   isDirector: false,
@@ -31,6 +32,7 @@ const TRANSACTION: InsiderTransactionRow = {
   formType: "4/A",
   issuerCik: "0001304492",
   issuerTicker: "ATEX",
+  resolvedTicker: "ATEX",
   availableAt: new Date("2026-09-11T16:08:08.000Z"),
   availabilitySource: "sec_acceptance_datetime",
   securityTitle: "Stock Option (Right to Buy)",
@@ -58,6 +60,13 @@ describe("insiderShardRows", () => {
   it("reads back filing and transaction rows exactly as they were written", () => {
     expect(insiderFilingFromShard({ ...FILING })).toEqual(FILING);
     expect(insiderTransactionFromShard({ ...TRANSACTION })).toEqual(TRANSACTION);
+  });
+
+  it("derives resolvedTicker for a shard written before the column existed", () => {
+    const { resolvedTicker: _dropped, ...legacy } = { ...TRANSACTION, issuerTicker: "NYSE: ATEX" };
+    expect(insiderTransactionFromShard(legacy).resolvedTicker).toBe("ATEX");
+    // A shard that has the column is trusted as written, including a null.
+    expect(insiderTransactionFromShard({ ...TRANSACTION, resolvedTicker: null }).resolvedTicker).toBeNull();
   });
 
   it("stops on a value outside the row's type", () => {

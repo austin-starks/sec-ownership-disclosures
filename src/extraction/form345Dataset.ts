@@ -2,6 +2,7 @@ import JSZip from "jszip";
 
 import { endOfDayNewYork, parseSecDatasetDate } from "../utils/disclosureDates";
 import { readTsvArchive, type TsvRecord } from "./tsv";
+import { resolveIssuerTicker } from "./issuerTicker";
 
 /**
  * SEC quarterly Form 3/4/5 insider data sets into the lake's two insider tables.
@@ -29,6 +30,8 @@ export interface InsiderFilingRow {
   issuerCik: string;
   issuerName: string | null;
   issuerTicker: string | null;
+  /** `issuerTicker` reduced to one joinable symbol; see `resolveIssuerTicker`. */
+  resolvedTicker: string | null;
   ownerCik: string;
   ownerName: string | null;
   isDirector: boolean;
@@ -50,6 +53,7 @@ export interface InsiderTransactionRow {
   formType: string;
   issuerCik: string;
   issuerTicker: string | null;
+  resolvedTicker: string | null;
   availableAt: Date;
   availabilitySource: string;
   securityTitle: string;
@@ -179,6 +183,7 @@ interface SubmissionFacts {
   formType: string;
   issuerCik: string;
   issuerTicker: string | null;
+  resolvedTicker: string | null;
   availableAt: Date;
 }
 
@@ -205,6 +210,7 @@ export async function parseForm345Dataset(
       formType: required(submission.DOCUMENT_TYPE, `SUBMISSION DOCUMENT_TYPE ${accession}`),
       issuerCik: required(submission.ISSUERCIK, `SUBMISSION ISSUERCIK ${accession}`),
       issuerTicker: text(submission.ISSUERTRADINGSYMBOL),
+      resolvedTicker: resolveIssuerTicker(text(submission.ISSUERTRADINGSYMBOL)),
       availableAt: endOfDayNewYork(filingDate),
     });
   }
@@ -230,6 +236,7 @@ export async function parseForm345Dataset(
       issuerCik: facts.issuerCik,
       issuerName: text(submission.ISSUERNAME),
       issuerTicker: facts.issuerTicker,
+      resolvedTicker: facts.resolvedTicker,
       ownerCik: required(owner.RPTOWNERCIK, `REPORTINGOWNER RPTOWNERCIK ${accession}`),
       ownerName: text(owner.RPTOWNERNAME),
       isDirector: codes.has("DIRECTOR"),
@@ -254,6 +261,7 @@ export async function parseForm345Dataset(
       formType: facts.formType,
       issuerCik: facts.issuerCik,
       issuerTicker: facts.issuerTicker,
+      resolvedTicker: facts.resolvedTicker,
       availableAt: facts.availableAt,
       availabilitySource: SEC_DATASET_AVAILABILITY_SOURCE,
       securityTitle: required(record.SECURITY_TITLE, `${context} SECURITY_TITLE`),

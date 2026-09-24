@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.4.0
+
+### Insider rows carry a joinable `resolvedTicker`
+
+`issuerTradingSymbol` is whatever the filer typed. In the published insider
+transactions, 0.8% of 2026 rows and 1.6% of 2015 rows are not ticker-shaped
+(`vicr`, `NYSE: KRC`, `(SIRI)`, `"OMEX"`, `LEN, LEN.B`, `Z AND ZG`, `N O G`,
+`none`), so a join on `issuerTicker` silently dropped those trades.
+
+- **Added** `resolvedTicker` to `insider_filings` and `insider_transactions`,
+  set by both the quarterly data set parser and the daily EDGAR XML parser.
+- **Added** `extraction/issuerTicker` with `resolveIssuerTicker`: uppercase,
+  strip quotes, brackets and venue prefixes, rejoin `N O G`, take the first
+  class of a list, keep a lowercase class letter (`MTLp`) as the 13F column
+  does, and return null when no listed symbol is named.
+- `issuerTicker` is unchanged and still verbatim.
+- Shards written before this version have no `resolvedTicker` column. The shard
+  readers derive it with the same function, so a lake can be republished year by
+  year without a flag day.
+
 ## 0.3.0
 
 ### The package can now resolve tickers itself

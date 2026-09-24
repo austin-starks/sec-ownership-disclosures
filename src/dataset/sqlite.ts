@@ -48,11 +48,11 @@ export interface MaterializedSecOwnershipSqlite {
 const DECLARED_COLUMNS: Record<SecOwnershipTable, readonly string[]> = {
   insider_filings: [
     "accession", "formType", "filingDate", "availableAt", "periodOfReport",
-    "issuerCik", "issuerName", "issuerTicker", "ownerCik", "ownerName",
+    "issuerCik", "issuerName", "issuerTicker", "resolvedTicker", "ownerCik", "ownerName",
     "isDirector", "isOfficer", "isTenPercentOwner", "officerTitle",
   ],
   insider_transactions: [
-    "accession", "rowKind", "rowSk", "formType", "issuerCik", "issuerTicker",
+    "accession", "rowKind", "rowSk", "formType", "issuerCik", "issuerTicker", "resolvedTicker",
     "availableAt", "securityTitle", "transactionDate", "transactionCode",
     "shares", "pricePerShare", "acquiredDisposed", "sharesOwnedFollowing",
   ],

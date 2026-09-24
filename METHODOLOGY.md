@@ -71,6 +71,10 @@ report; unknown codes surface there, never silently.
   carrying one are 2024+, after the 2023 amendments made it an optional column.
   An aggregate "3.7% overall" hid that shape. CUSIP→ticker mapping is the
   remaining workload, not yet built.
+- Insider `issuerTicker` is free text typed by the filer: 0.8% of 2026 and
+  1.6% of 2015 transactions are not ticker-shaped. `resolvedTicker` reduces it
+  to one symbol from the row's own text (first class of a list, null when no
+  symbol is named); `issuerTicker` stays verbatim.
 - 13F value is as-reported in thousands of USD (FORM13F readme); shares are
   as-reported counts.
 - Classic quarters and acceptance windows are disjoint accession sets

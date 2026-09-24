@@ -80,7 +80,7 @@ database you can query immediately:
 
 ```bash
 sqlite3 sec-ownership-data/sec-ownership.db \
-  "SELECT issuerTicker, count(*) FROM insider_transactions
+  "SELECT resolvedTicker, count(*) FROM insider_transactions
     WHERE transactionCode = 'P' AND availableAt <= '2024-06-30'
     GROUP BY 1 ORDER BY 2 DESC LIMIT 10"
 ```
@@ -163,6 +163,21 @@ Issuer, owner and manager names can be blank in official filings — a 2020
 Trupanion filing carries blank names with valid CIKs. Join on **CIK**,
 **accession** and **CUSIP**. The package keeps names verbatim, including the
 empty ones, instead of inventing a display value that would then be joined on.
+
+## Join insider trades on `resolvedTicker`
+
+`issuerTicker` is the filer's own text, kept exactly as typed, and SEC does not
+check it. In the published insider transactions, 0.8% of 2026 rows and 1.6% of
+2015 rows are not ticker-shaped: `vicr`, `NYSE: KRC`, `(SIRI)`, `LEN, LEN.B`,
+`Z AND ZG`, `N O G`, `none`. A price join on that column drops every one of
+those trades.
+
+`resolvedTicker` is the same field reduced to one symbol. It uppercases, strips
+quotes, brackets and venue prefixes, rejoins a symbol typed one letter at a
+time, and takes the first class when a filer lists several. It keeps a
+lowercase class letter (`MTLp`), the same convention as the 13F column. A value
+naming no listed symbol, usually a private issuer, becomes null. It reads only
+the row's own text, so it is as point-in-time as the filing.
 
 ## Use it as a library
 

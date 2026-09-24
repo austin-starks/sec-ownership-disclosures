@@ -194,6 +194,7 @@ describe("form4Xml", () => {
         issuerCik: "0001304492",
         issuerName: "Anterix Inc.",
         issuerTicker: "ATEX",
+        resolvedTicker: "ATEX",
         ownerCik: "0001669943",
         ownerName: "Ashe Gena L",
         isDirector: false,

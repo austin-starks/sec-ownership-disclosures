@@ -4,6 +4,7 @@ import moment from "moment-timezone";
 
 import { AVAILABILITY_EPSILON_MS } from "../sources/filingAvailability";
 import { parseEdgarAcceptanceDateTime } from "../utils/disclosureDates";
+import { resolveIssuerTicker } from "./issuerTicker";
 import type {
   Form345DatasetRows,
   InsiderFilingRow,
@@ -103,6 +104,7 @@ export function parseEdgarOwnershipSubmission(
     throw new Error(`ownershipDocument ${accession} is missing documentType, issuerCik or issuerName`);
   }
   const issuerTicker = childText(document, ["issuer", "issuerTradingSymbol"]);
+  const resolvedTicker = resolveIssuerTicker(issuerTicker);
   const availableAt = new Date(acceptedAt.getTime() + AVAILABILITY_EPSILON_MS);
 
   const filings = document
@@ -128,6 +130,7 @@ export function parseEdgarOwnershipSubmission(
         issuerCik,
         issuerName,
         issuerTicker,
+        resolvedTicker,
         ownerCik,
         ownerName,
         isDirector: childFlag(owner, relationship("isDirector")) === true,
@@ -161,6 +164,7 @@ export function parseEdgarOwnershipSubmission(
           formType,
           issuerCik,
           issuerTicker,
+          resolvedTicker,
           availableAt,
           availabilitySource: SEC_ACCEPTANCE_AVAILABILITY_SOURCE,
           securityTitle,

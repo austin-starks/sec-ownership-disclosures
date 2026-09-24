@@ -1,7 +1,13 @@
 import { ShardRowReader } from "../utils/shardRowFields";
 import type { InsiderFilingRow, InsiderTransactionRow } from "../extraction/form345Dataset";
+import { resolveIssuerTicker } from "../extraction/issuerTicker";
 
 const ROW_KINDS = ["nonderiv", "deriv"] as const;
+
+/** Shards published before 0.4.0 have no `resolvedTicker`; derive it the same way. */
+function resolvedTickerOf(raw: Record<string, unknown>, row: ShardRowReader): string | null {
+  return "resolvedTicker" in raw ? row.textOrNull("resolvedTicker") : resolveIssuerTicker(row.textOrNull("issuerTicker"));
+}
 
 /** An `insider_filings` row read back from its shard, validated field by field. */
 export function insiderFilingFromShard(raw: Record<string, unknown>): InsiderFilingRow {
@@ -17,6 +23,7 @@ export function insiderFilingFromShard(raw: Record<string, unknown>): InsiderFil
     issuerCik: row.text("issuerCik"),
     issuerName: row.textOrNull("issuerName"),
     issuerTicker: row.textOrNull("issuerTicker"),
+    resolvedTicker: resolvedTickerOf(raw, row),
     ownerCik: row.text("ownerCik"),
     ownerName: row.textOrNull("ownerName"),
     isDirector: row.boolean("isDirector"),
@@ -40,6 +47,7 @@ export function insiderTransactionFromShard(raw: Record<string, unknown>): Insid
     formType: row.text("formType"),
     issuerCik: row.text("issuerCik"),
     issuerTicker: row.textOrNull("issuerTicker"),
+    resolvedTicker: resolvedTickerOf(raw, row),
     availableAt: row.date("availableAt"),
     availabilitySource: row.text("availabilitySource"),
     securityTitle: row.text("securityTitle"),
