@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.1
+
+### Separate insider and institutional quick starts
+
+- Added parallel download, SQLite query, backfill and audit examples for
+  insider Forms 3/4/5 and institutional 13F data.
+- Clarified dataset selectors, table relationships, local storage and the
+  difference between published SQLite downloads and raw SEC archive backfills.
+- Made standalone `npx` backfill and audit commands select this package
+  explicitly, and corrected the explanation of 13F archive discovery.
+- Documentation-only release; runtime behavior is unchanged.
+
 ## 0.4.0
 
 ### Insider rows carry a joinable `resolvedTicker`
