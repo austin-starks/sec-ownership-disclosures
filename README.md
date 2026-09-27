@@ -63,65 +63,124 @@ Twenty years of Form 3/4/5, from 81 quarterly data sets, plus 54 windows of 13F.
 
 ## Quick start
 
-There are two doors, and they answer different questions.
+One package covers two datasets. Choose the one you need:
 
-### 1. Download the published dataset
+| Dataset | SEC forms | Published tables | Backfill selector |
+|---|---|---|---|
+| [Insider data](#insider-data) | Forms 3/4/5 | `insider_transactions`, `insider_filings` | `--dataset form345` |
+| [Institutional data](#institutional-data) | 13F | `institutional_holdings`, `institutional_filings` | `--dataset form13f` |
 
-No SEC etiquette, no twenty-year backfill, no credentials:
+Both use `sec-ownership-disclosures download` for the published snapshot and
+`sec-backfill` for official SEC archives. The table or dataset selector chooses
+the workflow; there are no separate insider and institutional executables.
+
+**Download** when you want a SQLite database to query immediately, with no SEC
+requests or credentials. **Backfill** when you want to fetch and archive the
+official sources yourself, then audit them. Backfill stores raw ZIPs and
+receipts; it does not create the downloadable SQLite database.
+
+### Insider data
+
+Forms 3/4/5 describe insiders' ownership and reported transactions, including
+purchases, sales, grants and option exercises. Start with one year of
+transactions from [the published
+dataset](https://huggingface.co/datasets/austin-starks/sec-ownership-disclosures):
+
+```bash
+npx sec-ownership-disclosures download --table insider_transactions --year 2024 \
+  --out ./insider-data --sqlite
+
+sqlite3 insider-data/sec-ownership.db \
+  "SELECT resolvedTicker, count(*) FROM insider_transactions
+    WHERE transactionCode = 'P' AND availableAt < '2025-01-01'
+    GROUP BY 1 ORDER BY 2 DESC LIMIT 10"
+```
+
+The query counts open-market purchase legs by ticker that became available in
+2024. Use `--table insider_filings` to download filing/owner metadata instead.
+
+To backfill the official insider archives into a local directory:
+
+```bash
+# Preview the quarters and receipts; writes nothing
+npx --package=sec-ownership-disclosures sec-backfill --dataset form345 \
+  --from 2024q1 --to 2024q4 --store fs --fs-root ./insider-lake --round insiders-2024
+
+# Fetch, archive and parse the quarters, then write receipts
+npx --package=sec-ownership-disclosures sec-backfill --dataset form345 \
+  --from 2024q1 --to 2024q4 --store fs --fs-root ./insider-lake --round insiders-2024 --run
+
+# Audit by re-parsing the archived ZIPs
+npx --package=sec-ownership-disclosures sec-integrity --dataset form345 \
+  --store fs --fs-root ./insider-lake --round insiders-2024
+```
+
+For the historical insider backfill, change `--from` to `2006q1` and choose the
+last published quarter with `--to`.
+
+### Institutional data
+
+13F filings describe managers' holdings for a reporting period. They are
+holdings snapshots, not a complete record of trades between reports. Download
+one year of holdings and inspect the most recently available rows:
+
+```bash
+npx sec-ownership-disclosures download --table institutional_holdings --year 2024 \
+  --out ./institutional-data --sqlite
+
+sqlite3 institutional-data/sec-ownership.db \
+  "SELECT accession, availableAt, issuerName, cusip, sharesAmount
+    FROM institutional_holdings
+    WHERE availableAt < '2025-01-01'
+    ORDER BY availableAt DESC LIMIT 10"
+```
+
+Use `--table institutional_filings` to download manager names, CIKs, report
+periods and amendment metadata instead. Holdings and filings join on
+`accession`; download both tables when you need that join.
+
+To discover and backfill the official 13F archive windows:
+
+```bash
+# Preview the available archive windows; writes nothing
+npx --package=sec-ownership-disclosures sec-backfill --dataset form13f --discover \
+  --store fs --fs-root ./institutional-lake --round institutions-backfill
+
+# Fetch, archive and parse the windows, then write receipts
+npx --package=sec-ownership-disclosures sec-backfill --dataset form13f --discover \
+  --store fs --fs-root ./institutional-lake --round institutions-backfill --run
+
+# Audit by re-parsing the archived ZIPs
+npx --package=sec-ownership-disclosures sec-integrity --dataset form13f \
+  --store fs --fs-root ./institutional-lake --round institutions-backfill
+
+# Measure filing delays from the submission tables
+npx --package=sec-ownership-disclosures sec-lags \
+  --store fs --fs-root ./institutional-lake --round institutions-backfill
+```
+
+### Shared command options
+
+To download all four published tables into one SQLite database:
 
 ```bash
 npx sec-ownership-disclosures download --sqlite
 ```
 
-That fetches [the published
-dataset](https://huggingface.co/datasets/austin-starks/sec-ownership-disclosures),
-verifies every file against the `sha256` in `snapshot.json`, and leaves a SQLite
-database you can query immediately:
+Omit `--year` to download all years of the selected table. Each file is verified
+against the `sha256` in `snapshot.json`; files already on disk with the right
+digest are reused, so interrupted downloads resume.
 
-```bash
-sqlite3 sec-ownership-data/sec-ownership.db \
-  "SELECT resolvedTicker, count(*) FROM insider_transactions
-    WHERE transactionCode = 'P' AND availableAt <= '2024-06-30'
-    GROUP BY 1 ORDER BY 2 DESC LIMIT 10"
-```
+The backfill and audit examples use `npx --package=sec-ownership-disclosures`
+to select the package that supplies the executable, without a prior install.
+If you have installed it with `npm install sec-ownership-disclosures`, you can
+also use the shorter `npx sec-backfill`, `npx sec-integrity` and `npx sec-lags`.
 
-The whole dataset is a few GB, so start with a slice — `--table
-insider_transactions`, `--year 2024`, or both. A file already on disk with the
-right digest is reused, so an interrupted download resumes for free, and the
-digest check means a truncated or tampered mirror fails instead of quietly
-answering the wrong question.
-
-### 2. Build the lake yourself
-
-The published dataset is a snapshot. Running the pipeline is how you get a lake
-that is current, that you control, and that you can audit line by line:
-
-```bash
-npm install sec-ownership-disclosures
-```
-
-Back-fill the insider data sets into a local directory:
-
-```bash
-# dry run: lists the quarters it would fetch and the receipts it already has
-npx sec-backfill --dataset form345 --from 2006q1 --to 2026q1 \
-  --store fs --fs-root ./sec-lake --round my-backfill
-
-npx sec-backfill --dataset form345 --from 2006q1 --to 2026q1 \
-  --store fs --fs-root ./sec-lake --round my-backfill --run
-```
-
-Everything is **dry run by default**; `--run` is what writes. `--store`
-defaults to `tigris` — pass `--store fs --fs-root <dir>` to keep everything on
-local disk. `--round` names the receipt set, and defaults to
-`backfill-{today}`.
-
-Audit what landed, by re-parsing the archives rather than trusting the run:
-
-```bash
-npx sec-integrity --dataset form345 --store fs --fs-root ./sec-lake --round my-backfill
-npx sec-lags --store fs --fs-root ./sec-lake --round my-backfill
-```
+Backfill and audit commands are **dry run by default**; `--run` enables writes.
+`--store` defaults to `tigris` — pass `--store fs --fs-root <dir>` for local
+storage. `--round` names the receipt set and defaults to `backfill-{today}` for
+backfills. Keep the same storage directory and round when resuming or auditing
+a backfill, and use separate rounds for insiders and institutions.
 
 `sec-integrity` requires `--round`, because it cross-checks the receipts that
 round wrote. `sec-lags` reads the SUBMISSION tables only, so it answers the
@@ -134,12 +193,12 @@ machine skips what is receipted, and a second run processes nothing. To spread
 twenty years across four machines, split on stable identity hashes:
 
 ```bash
-npx sec-backfill --dataset form13f --discover --shard 0/4 --round q3 --run
-npx sec-backfill --dataset form13f --discover --shard 1/4 --round q3 --run
+npx --package=sec-ownership-disclosures sec-backfill --dataset form13f --discover --shard 0/4 --round q3 --run
+npx --package=sec-ownership-disclosures sec-backfill --dataset form13f --discover --shard 1/4 --round q3 --run
 # ...
 ```
 
-`--discover` walks forward until the sources 404, so it finds new quarters
+`--discover` reads the SEC's 13F dataset index to find published archive windows
 without being told the end date.
 
 Because sharding is by hash rather than by position, the shard count can change
