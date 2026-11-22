@@ -238,6 +238,48 @@ lowercase class letter (`MTLp`), the same convention as the 13F column. A value
 naming no listed symbol, usually a private issuer, becomes null. It reads only
 the row's own text, so it is as point-in-time as the filing.
 
+## Find the CEO with `isCeo`
+
+Form 3/4/5 has an officer checkbox and a free-text title, and no CEO field.
+`insider_filings` carries two columns derived from that title:
+
+| Column | Type | Meaning |
+|---|---|---|
+| `isCeo` | BOOLEAN | The officer title printed on this filing reads as the issuer's own chief executive. |
+| `ceoTitleRule` | VARCHAR | The classifier rule that computed `isCeo`, currently `ceo-title2`. |
+
+`isCeo` is true for the issuer's CEO with any other titles listed beside it
+(`President and CEO`, `CEO, Dir`, `CEO of the Company`), including interim,
+acting and co-CEOs. It is false for former, retired, incoming, deputy, vice and
+assistant CEOs, a CEO-elect or CEO-designate, staff and relatives of the CEO
+(`Chief of Staff to the CEO`, `Office of the CEO`, `CEO's spouse`), a CEO of a
+region, division or subsidiary (`CEO, Americas`, `CEO of Subsidiary Bank`), and
+a title that names no CEO, including SEC's `See Remarks` placeholder.
+
+Each row reads the title on its own filing, so the flag is point-in-time: a
+CEO's earlier filings as CFO stay false, and an amendment reads the title the
+amendment carries. `ceoTitleRule` changes whenever the rule changes what any
+title reads as, and every published year is rewritten under one rule.
+
+```bash
+npx sec-ownership-disclosures download --table insider_filings --year 2024 \
+  --out ./insider-filings --sqlite
+
+sqlite3 insider-filings/sec-ownership.db \
+  "SELECT resolvedTicker, count(DISTINCT accession) FROM insider_filings
+    WHERE isCeo = 1 GROUP BY 1 ORDER BY 2 DESC LIMIT 10"
+```
+
+In a database holding both insider tables,
+`accession IN (SELECT accession FROM insider_filings WHERE isCeo = 1)` narrows
+`insider_transactions` to filings that name a CEO as a reporting owner. The
+subquery keeps each transaction once: a joint filing has one `insider_filings`
+row per owner, so a plain join repeats its transactions.
+
+The classifier is exported as `insiderOfficerTitleRole` and
+`insiderTitleIsCeo`, with `INSIDER_CEO_TITLE_RULE`, so the same rule can be
+applied to titles from any other source.
+
 ## Use it as a library
 
 ```ts

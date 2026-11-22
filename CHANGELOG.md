@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.5.0
+
+### Insider filings carry a point-in-time CEO flag
+
+Forms 3/4/5 have no CEO field: the role lives in a free-text officer title.
+
+- **Added** `isCeo` and `ceoTitleRule` to `insider_filings`, set by both the
+  quarterly data set parser and the daily EDGAR XML parser. `isCeo` reads the
+  title on that filing, so a role is never taken from a later filing, and an
+  amendment reads its own title.
+- **Added** `extraction/insiderOfficerTitle` with `insiderOfficerTitleRole`,
+  `insiderTitleIsCeo`, `insiderCeoColumns`, the `InsiderOfficerTitleRole` enum
+  and `INSIDER_CEO_TITLE_RULE` (`ceo-title2`). Interim, acting and co-CEOs
+  count. Former, retired, incoming, elect, designate, deputy, vice and
+  assistant CEOs, staff and relatives of the CEO, CEOs of a region, division
+  or subsidiary, and titles that name no CEO (including "See Remarks") do not.
+- The SQLite build declares both columns on `insider_filings`.
+- Shards written before this version have no `isCeo`, and a shard stamped by an
+  earlier rule holds that rule's reading. The shard reader derives both from
+  `officerTitle` with the current rule, so a lake can be republished year by
+  year without a flag day. Rows written by the current rule are read as stored.
+- `InsiderFilingRow` gains two required fields; code that builds filing rows by
+  hand can spread `insiderCeoColumns(officerTitle)` into them.
+
 ## 0.4.1
 
 ### Separate insider and institutional quick starts
