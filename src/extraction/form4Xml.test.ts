@@ -205,6 +205,8 @@ describe("form4Xml", () => {
         ownerRelationshipText: null,
         aff10b5One: false,
         rawArchiveKey: "sec/filings/raw.txt",
+        isCeo: false,
+        ceoTitleRule: "ceo-title2",
       },
     ]);
     expect(transactions.map((row) => [row.rowKind, row.rowSk, row.transactionCode, row.shares, row.pricePerShare])).toEqual([
@@ -247,6 +249,16 @@ describe("form4Xml", () => {
       directIndirect: "I",
       natureOfOwnership: "See Footnote",
     });
+  });
+
+  it("marks a filer CEO from the officer title printed on this filing", () => {
+    const titled = (title: string) =>
+      parseEdgarOwnershipSubmission(ANTERIX_4A.replace("Chief Legal Officer &amp; Corp Sec", title), "raw").filings[0];
+    expect(titled("President &amp; Chief Executive Officer")).toMatchObject({ isCeo: true, ceoTitleRule: "ceo-title2" });
+    expect(titled("CEO-Designate")).toMatchObject({ isCeo: false, ceoTitleRule: "ceo-title2" });
+    expect(titled("CEO, Americas")).toMatchObject({ isCeo: false, ceoTitleRule: "ceo-title2" });
+    // Joint filers without an officer title are never CEO.
+    expect(parseEdgarOwnershipSubmission(JOINT_4, "raw").filings.map((row) => row.isCeo)).toEqual([false, false]);
   });
 
   it("refuses a submission without an acceptance time or an ownership document", () => {

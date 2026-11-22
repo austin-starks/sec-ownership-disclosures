@@ -41,7 +41,7 @@ function blankRow(header: string[], values: Record<string, string>): string[] {
   return header.map((column) => values[column] ?? "");
 }
 
-async function datasetZip(overrides: { submission?: string } = {}): Promise<Buffer> {
+async function datasetZip(overrides: { submission?: string; firstOwnerTitle?: string } = {}): Promise<Buffer> {
   const archive = new JSZip();
   archive.file(
     "SUBMISSION.tsv",
@@ -63,7 +63,7 @@ async function datasetZip(overrides: { submission?: string } = {}): Promise<Buff
     tsv(OWNER, [
       blankRow(OWNER, {
         ACCESSION_NUMBER: "0001-25-000241", RPTOWNERCIK: "0001746356", RPTOWNERNAME: "Schena Don",
-        RPTOWNER_RELATIONSHIP: "Officer", RPTOWNER_TITLE: "Chief Customer Officer",
+        RPTOWNER_RELATIONSHIP: "Officer", RPTOWNER_TITLE: overrides.firstOwnerTitle ?? "Chief Customer Officer",
       }),
       blankRow(OWNER, {
         ACCESSION_NUMBER: "0001-25-000241", RPTOWNERCIK: "0009999999", RPTOWNERNAME: "Fund LP",
@@ -122,6 +122,13 @@ describe("form345Dataset", () => {
     if (!firstFiling) throw new Error("expected at least one filing");
     expect(firstFiling.availableAt.toISOString()).toBe("2025-11-01T03:59:59.999Z");
     expect(filings[1]).toMatchObject({ isDirector: true, isTenPercentOwner: true, isOfficer: false });
+    expect(filings.map((row) => [row.officerTitle, row.isCeo, row.ceoTitleRule])).toEqual([
+      ["Chief Customer Officer", false, "ceo-title2"],
+      [null, false, "ceo-title2"],
+      [null, false, "ceo-title2"],
+    ]);
+    const { filings: ceoFilings } = await parseForm345Dataset(await datasetZip({ firstOwnerTitle: "President and CEO" }), "key");
+    expect(ceoFilings.map((row) => row.isCeo)).toEqual([true, false, false]);
     expect(filings[2]).toMatchObject({
       isOther: true,
       ownerRelationshipText: "Former officer",

@@ -49,7 +49,7 @@ const DECLARED_COLUMNS: Record<SecOwnershipTable, readonly string[]> = {
   insider_filings: [
     "accession", "formType", "filingDate", "availableAt", "periodOfReport",
     "issuerCik", "issuerName", "issuerTicker", "resolvedTicker", "ownerCik", "ownerName",
-    "isDirector", "isOfficer", "isTenPercentOwner", "officerTitle",
+    "isDirector", "isOfficer", "isTenPercentOwner", "officerTitle", "isCeo", "ceoTitleRule",
   ],
   insider_transactions: [
     "accession", "rowKind", "rowSk", "formType", "issuerCik", "issuerTicker", "resolvedTicker",

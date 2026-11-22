@@ -168,6 +168,70 @@ describe("materializeSecOwnershipSqlite", () => {
   });
 });
 
+describe("insider_filings in SQLite", () => {
+  const FILINGS = [
+    {
+      accession: "0003",
+      availableAt: "2026-09-11T16:08:08.000Z",
+      issuerCik: "1304492",
+      ownerName: "Chief Executive",
+      officerTitle: "President & CEO",
+      isCeo: true,
+      ceoTitleRule: "ceo-title2",
+    },
+    {
+      accession: "0003",
+      availableAt: "2026-09-11T16:08:08.000Z",
+      issuerCik: "1304492",
+      ownerName: "Incoming Executive",
+      officerTitle: "CEO-Elect",
+      isCeo: false,
+      ceoTitleRule: "ceo-title2",
+    },
+  ];
+  const filingsSnapshot = {
+    schemaVersion: 1,
+    dataset: "austin-starks/sec-ownership-disclosures",
+    generatedAt: "2026-11-22T00:00:00.000Z",
+    totals: { insider_filings: FILINGS.length },
+    tables: {
+      insider_filings: {
+        rows: FILINGS.length,
+        years: [2026],
+        manifests: [
+          {
+            year: 2026,
+            files: [{ publicPath: "data/insider_filings/2026.parquet", size: 1, sha256: "d".repeat(64) }],
+          },
+        ],
+      },
+    },
+  } as never;
+
+  it("carries the title-derived CEO columns, so a CEO filter is one WHERE clause", async () => {
+    const datasetDirectory = await mkdtemp(join(tmpdir(), "sec-sqlite-ceo-"));
+    await mkdir(join(datasetDirectory, "data/insider_filings"), { recursive: true });
+    await writeFile(join(datasetDirectory, "data/insider_filings/2026.parquet"), "stub");
+
+    const built = await materializeSecOwnershipSqlite({
+      datasetDirectory,
+      databasePath: join(datasetDirectory, "out.db"),
+      snapshot: filingsSnapshot,
+      readParquetFile: async () => FILINGS,
+    });
+
+    const { DatabaseSync } = await import("node:sqlite");
+    const db = new DatabaseSync(built.database);
+    try {
+      const ceos = db.prepare("SELECT ownerName, ceoTitleRule FROM insider_filings WHERE isCeo = 1").all();
+      expect(ceos).toHaveLength(1);
+      expect(ceos[0]).toMatchObject({ ownerName: "Chief Executive", ceoTitleRule: "ceo-title2" });
+    } finally {
+      db.close();
+    }
+  });
+});
+
 describe("a filtered download and the database built from it", () => {
   /**
    * Two tables and two years, so a selection can be wrong in a way that shows.

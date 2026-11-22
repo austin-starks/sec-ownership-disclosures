@@ -2,6 +2,7 @@ import JSZip from "jszip";
 
 import { endOfDayNewYork, parseSecDatasetDate } from "../utils/disclosureDates";
 import { readTsvArchive, type TsvRecord } from "./tsv";
+import { insiderCeoColumns } from "./insiderOfficerTitle";
 import { resolveIssuerTicker } from "./issuerTicker";
 
 /**
@@ -42,6 +43,10 @@ export interface InsiderFilingRow {
   ownerRelationshipText: string | null;
   aff10b5One: boolean | null;
   rawArchiveKey: string;
+  /** This filing's own `officerTitle` reads as the issuer's CEO; see `insiderOfficerTitleRole`. */
+  isCeo: boolean;
+  /** The classifier rule that computed `isCeo` (`INSIDER_CEO_TITLE_RULE`). */
+  ceoTitleRule: string;
 }
 
 export type InsiderTransactionKind = "nonderiv" | "deriv";
@@ -225,6 +230,7 @@ export async function parseForm345Dataset(
     const facts = factsFor(accession, "REPORTINGOWNER");
     const submission = submissionByAccession.get(accession) as TsvRecord;
     const codes = relationshipCodes(owner.RPTOWNER_RELATIONSHIP);
+    const officerTitle = text(owner.RPTOWNER_TITLE);
     return {
       accession,
       formType: facts.formType,
@@ -243,10 +249,11 @@ export async function parseForm345Dataset(
       isOfficer: codes.has("OFFICER"),
       isTenPercentOwner: codes.has("TENPERCENTOWNER"),
       isOther: codes.has("OTHER"),
-      officerTitle: text(owner.RPTOWNER_TITLE),
+      officerTitle,
       ownerRelationshipText: text(owner.RPTOWNER_TXT),
       aff10b5One: flag(submission.AFF10B5ONE),
       rawArchiveKey,
+      ...insiderCeoColumns(officerTitle),
     };
   });
 

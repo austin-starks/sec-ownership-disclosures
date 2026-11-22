@@ -1,5 +1,6 @@
 import { ShardRowReader } from "../utils/shardRowFields";
 import type { InsiderFilingRow, InsiderTransactionRow } from "../extraction/form345Dataset";
+import { INSIDER_CEO_TITLE_RULE, insiderCeoColumns } from "../extraction/insiderOfficerTitle";
 import { resolveIssuerTicker } from "../extraction/issuerTicker";
 
 const ROW_KINDS = ["nonderiv", "deriv"] as const;
@@ -7,6 +8,16 @@ const ROW_KINDS = ["nonderiv", "deriv"] as const;
 /** Shards published before 0.4.0 have no `resolvedTicker`; derive it the same way. */
 function resolvedTickerOf(raw: Record<string, unknown>, row: ShardRowReader): string | null {
   return "resolvedTicker" in raw ? row.textOrNull("resolvedTicker") : resolveIssuerTicker(row.textOrNull("issuerTicker"));
+}
+
+/**
+ * Shards published before 0.5.0 have no `isCeo`, and a shard stamped by an earlier rule holds that rule's
+ * reading. Both are derived again from the row's own `officerTitle`, so a republished year carries one rule.
+ */
+function ceoColumnsOf(raw: Record<string, unknown>, row: ShardRowReader): Pick<InsiderFilingRow, "isCeo" | "ceoTitleRule"> {
+  const rule = "ceoTitleRule" in raw ? row.textOrNull("ceoTitleRule") : null;
+  if (rule === INSIDER_CEO_TITLE_RULE) return { isCeo: row.boolean("isCeo"), ceoTitleRule: rule };
+  return insiderCeoColumns(row.textOrNull("officerTitle"));
 }
 
 /** An `insider_filings` row read back from its shard, validated field by field. */
@@ -34,6 +45,7 @@ export function insiderFilingFromShard(raw: Record<string, unknown>): InsiderFil
     ownerRelationshipText: row.textOrNull("ownerRelationshipText"),
     aff10b5One: row.booleanOrNull("aff10b5One"),
     rawArchiveKey: row.text("rawArchiveKey"),
+    ...ceoColumnsOf(raw, row),
   };
 }
 

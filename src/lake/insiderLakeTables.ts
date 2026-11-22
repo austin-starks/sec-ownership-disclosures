@@ -34,6 +34,8 @@ export const INSIDER_FILINGS_COLUMNS: Readonly<Record<keyof InsiderFilingRow, st
   ownerRelationshipText: "VARCHAR",
   aff10b5One: "BOOLEAN",
   rawArchiveKey: "VARCHAR",
+  isCeo: "BOOLEAN",
+  ceoTitleRule: "VARCHAR",
 };
 
 export const INSIDER_TRANSACTIONS_COLUMNS: Readonly<Record<keyof InsiderTransactionRow, string>> = {

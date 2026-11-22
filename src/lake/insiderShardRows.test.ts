@@ -23,6 +23,8 @@ const FILING: InsiderFilingRow = {
   ownerRelationshipText: null,
   aff10b5One: false,
   rawArchiveKey: "sec/filings/0001669943/0001669943-26-000021/abc.txt",
+  isCeo: false,
+  ceoTitleRule: "ceo-title2",
 };
 
 const TRANSACTION: InsiderTransactionRow = {
@@ -69,10 +71,30 @@ describe("insiderShardRows", () => {
     expect(insiderTransactionFromShard({ ...TRANSACTION, resolvedTicker: null }).resolvedTicker).toBeNull();
   });
 
+  it("derives isCeo from the title for a shard written before the columns existed", () => {
+    const { isCeo: _isCeo, ceoTitleRule: _rule, ...legacy } = { ...FILING, officerTitle: "President & CEO" };
+    expect(insiderFilingFromShard(legacy)).toMatchObject({ isCeo: true, ceoTitleRule: "ceo-title2" });
+    // A year read through a union with newer years carries the columns as null.
+    expect(insiderFilingFromShard({ ...legacy, isCeo: null, ceoTitleRule: null })).toMatchObject({
+      isCeo: true,
+      ceoTitleRule: "ceo-title2",
+    });
+  });
+
+  it("trusts isCeo written under the current rule and reclassifies one written under another", () => {
+    // Written by the current rule: read as stored.
+    expect(insiderFilingFromShard({ ...FILING, isCeo: true }).isCeo).toBe(true);
+    // Written by an earlier rule: the title is read again, so a republished year carries one rule.
+    const stale = { ...FILING, officerTitle: "CEO-Elect", isCeo: true, ceoTitleRule: "ceo-title1" };
+    expect(insiderFilingFromShard(stale)).toMatchObject({ isCeo: false, ceoTitleRule: "ceo-title2" });
+  });
+
   it("stops on a value outside the row's type", () => {
     expect(() => insiderTransactionFromShard({ ...TRANSACTION, rowKind: "holding" })).toThrow(
       'insider_transactions row has an unexpected rowKind: "holding"'
     );
     expect(() => insiderFilingFromShard({ ...FILING, isOfficer: "1" })).toThrow('insider_filings row has an unexpected isOfficer: "1"');
+    expect(() => insiderFilingFromShard({ ...FILING, isCeo: null })).toThrow("insider_filings row has an unexpected isCeo: null");
+    expect(() => insiderFilingFromShard({ ...FILING, ceoTitleRule: 2 })).toThrow("insider_filings row has an unexpected ceoTitleRule: 2");
   });
 });
