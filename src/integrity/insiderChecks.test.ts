@@ -24,6 +24,8 @@ function filing(overrides: Partial<InsiderFilingRow> = {}): InsiderFilingRow {
     ownerRelationshipText: null,
     aff10b5One: null,
     rawArchiveKey: "k",
+    isCeo: false,
+    ceoTitleRule: "ceo-title2",
     ...overrides,
   };
 }

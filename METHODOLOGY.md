@@ -75,6 +75,15 @@ report; unknown codes surface there, never silently.
   1.6% of 2015 transactions are not ticker-shaped. `resolvedTicker` reduces it
   to one symbol from the row's own text (first class of a list, null when no
   symbol is named); `issuerTicker` stays verbatim.
+- Forms 3/4/5 have no CEO field. `insider_filings.isCeo` is derived from the
+  officer title on that row's own filing by a deterministic rule (no model),
+  so it is point-in-time and an amendment reads its own title. It counts the
+  issuer's CEO, including interim, acting and co-CEOs; it excludes former,
+  retired, incoming, elect, designate, deputy, vice and assistant CEOs, staff
+  and relatives of the CEO, CEOs of a subsidiary, division or region, and
+  titles naming no CEO (SEC's "See Remarks" included). A CEO whose filing
+  carries only "See Remarks" or no title reads false. `ceoTitleRule` records
+  the rule version (`ceo-title2`); a rule change rewrites every year.
 - 13F value is as-reported in thousands of USD (FORM13F readme); shares are
   as-reported counts.
 - Classic quarters and acceptance windows are disjoint accession sets

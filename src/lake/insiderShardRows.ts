@@ -1,5 +1,10 @@
 import { ShardRowReader } from "../utils/shardRowFields";
 import type { InsiderFilingRow, InsiderTransactionRow } from "../extraction/form345Dataset";
+import {
+  INSIDER_CEO_CLASSIFIER_VERSION,
+  INSIDER_CEO_TITLE_RULE,
+  insiderCeoColumns,
+} from "../extraction/insiderOfficerTitle";
 import { resolveIssuerTicker } from "../extraction/issuerTicker";
 
 const ROW_KINDS = ["nonderiv", "deriv"] as const;
@@ -7,6 +12,32 @@ const ROW_KINDS = ["nonderiv", "deriv"] as const;
 /** Shards published before 0.4.0 have no `resolvedTicker`; derive it the same way. */
 function resolvedTickerOf(raw: Record<string, unknown>, row: ShardRowReader): string | null {
   return "resolvedTicker" in raw ? row.textOrNull("resolvedTicker") : resolveIssuerTicker(row.textOrNull("issuerTicker"));
+}
+
+const CEO_TITLE_RULE_VERSION = /^ceo-title(\d+)$/;
+
+/**
+ * The `isCeo` and `ceoTitleRule` a stored `insider_filings` row carries under the current rule. A row written
+ * by the current rule is read as stored. Shards published before 0.5.0 have no `isCeo`, and a shard stamped by
+ * an earlier rule holds that rule's reading: both are derived again from the row's own `officerTitle`, so a
+ * republished year carries one rule. A row stamped by a newer rule than this package knows throws rather than
+ * being downgraded. The SQLite build fills the same columns through this function.
+ */
+export function insiderFilingCeoColumnsFromShard(raw: Record<string, unknown>): Pick<InsiderFilingRow, "isCeo" | "ceoTitleRule"> {
+  const row = new ShardRowReader("insider_filings", raw);
+  const rule = "ceoTitleRule" in raw ? row.textOrNull("ceoTitleRule") : null;
+  if (rule === INSIDER_CEO_TITLE_RULE) return { isCeo: row.boolean("isCeo"), ceoTitleRule: rule };
+  if (rule !== null) {
+    const version = CEO_TITLE_RULE_VERSION.exec(rule)?.[1];
+    if (version === undefined) throw new Error(`insider_filings row has an unexpected ceoTitleRule: ${JSON.stringify(rule)}`);
+    if (Number(version) > INSIDER_CEO_CLASSIFIER_VERSION) {
+      throw new Error(
+        `insider_filings row was classified by ${rule}, newer than this package's ${INSIDER_CEO_TITLE_RULE}; ` +
+          "upgrade sec-ownership-disclosures to read it"
+      );
+    }
+  }
+  return insiderCeoColumns(row.textOrNull("officerTitle"));
 }
 
 /** An `insider_filings` row read back from its shard, validated field by field. */
@@ -34,6 +65,7 @@ export function insiderFilingFromShard(raw: Record<string, unknown>): InsiderFil
     ownerRelationshipText: row.textOrNull("ownerRelationshipText"),
     aff10b5One: row.booleanOrNull("aff10b5One"),
     rawArchiveKey: row.text("rawArchiveKey"),
+    ...insiderFilingCeoColumnsFromShard(raw),
   };
 }
 

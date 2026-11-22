@@ -4,6 +4,7 @@ import moment from "moment-timezone";
 
 import { AVAILABILITY_EPSILON_MS } from "../sources/filingAvailability";
 import { parseEdgarAcceptanceDateTime } from "../utils/disclosureDates";
+import { insiderCeoColumns } from "./insiderOfficerTitle";
 import { resolveIssuerTicker } from "./issuerTicker";
 import type {
   Form345DatasetRows,
@@ -116,6 +117,7 @@ export function parseEdgarOwnershipSubmission(
       const ownerName = childText(owner, ["reportingOwnerId", "rptOwnerName"]);
       if (!ownerCik || !ownerName) throw new Error(`ownershipDocument ${accession} has an owner without CIK or name`);
       const relationship = (name: string): string[] => ["reportingOwnerRelationship", name];
+      const officerTitle = childText(owner, relationship("officerTitle"));
       return {
         accession,
         formType,
@@ -137,10 +139,11 @@ export function parseEdgarOwnershipSubmission(
         isOfficer: childFlag(owner, relationship("isOfficer")) === true,
         isTenPercentOwner: childFlag(owner, relationship("isTenPercentOwner")) === true,
         isOther: childFlag(owner, relationship("isOther")) === true,
-        officerTitle: childText(owner, relationship("officerTitle")),
+        officerTitle,
         ownerRelationshipText: childText(owner, relationship("otherText")),
         aff10b5One: childFlag(document, ["aff10b5One"]),
         rawArchiveKey,
+        ...insiderCeoColumns(officerTitle),
       };
     });
   if (filings.length === 0) throw new Error(`ownershipDocument ${accession} has no reportingOwner`);

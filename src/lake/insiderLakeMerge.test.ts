@@ -1,8 +1,9 @@
 import { SEC_DATASET_AVAILABILITY_SOURCE, type Form345DatasetRows, type InsiderFilingRow, type InsiderTransactionRow } from "../extraction/form345Dataset";
 import { SEC_ACCEPTANCE_AVAILABILITY_SOURCE } from "../extraction/form4Xml";
+import { insiderCeoColumns } from "../extraction/insiderOfficerTitle";
 import { mergeInsiderRows } from "./insiderLakeMerge";
 
-function filing(accession: string, availabilitySource: string): InsiderFilingRow {
+function filing(accession: string, availabilitySource: string, officerTitle = "CFO"): InsiderFilingRow {
   return {
     accession,
     formType: "4",
@@ -21,10 +22,11 @@ function filing(accession: string, availabilitySource: string): InsiderFilingRow
     isOfficer: true,
     isTenPercentOwner: false,
     isOther: false,
-    officerTitle: "CFO",
+    officerTitle,
     ownerRelationshipText: null,
     aff10b5One: false,
     rawArchiveKey: `raw/${accession}`,
+    ...insiderCeoColumns(officerTitle),
   };
 }
 
@@ -91,6 +93,16 @@ describe("insiderLakeMerge", () => {
       ["B", DAILY],
     ]);
     expect(merged.transactions.map((row) => `${row.accession}/${row.rowSk}`)).toEqual(["C/902", "A/1", "B/1", "B/2"]);
+  });
+
+  it("keeps each filing's own CEO flag, so an amendment never reclassifies its original", () => {
+    const original = { filings: [filing("A", DATASET, "President and CEO")], transactions: [] };
+    const amendment = { filings: [{ ...filing("B", DAILY, "Former CEO"), formType: "4/A" }], transactions: [] };
+    const merged = mergeInsiderRows(original, amendment);
+    expect(merged.filings.map((row) => [row.accession, row.formType, row.isCeo, row.ceoTitleRule])).toEqual([
+      ["A", "4", true, "ceo-title2"],
+      ["B", "4/A", false, "ceo-title2"],
+    ]);
   });
 
   it("refuses an accession whose rows claim two availability sources", () => {

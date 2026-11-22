@@ -14,6 +14,15 @@ describe("insiderLakeTables", () => {
     expect(Object.keys(INSIDER_TRANSACTIONS_COLUMNS)).not.toContain("ownerCik");
   });
 
+  it("ends insider_filings with the title-derived CEO columns, in the lake's Parquet order", () => {
+    expect(Object.entries(INSIDER_FILINGS_COLUMNS).slice(-3)).toEqual([
+      ["rawArchiveKey", "VARCHAR"],
+      ["isCeo", "BOOLEAN"],
+      ["ceoTitleRule", "VARCHAR"],
+    ]);
+    expect(Object.keys(INSIDER_TRANSACTIONS_COLUMNS)).not.toContain("isCeo");
+  });
+
   it("buckets rows by the UTC year of availableAt, so a Dec 31 filing lands in the next year", () => {
     const rows = [
       { id: "a", availableAt: new Date("2026-01-01T04:59:59.999Z") },
