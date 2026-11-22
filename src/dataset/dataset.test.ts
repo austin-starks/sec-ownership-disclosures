@@ -169,10 +169,40 @@ describe("materializeSecOwnershipSqlite", () => {
 });
 
 describe("SQLite column types", () => {
-  const FILINGS = [
+  type ParquetRow = Record<string, unknown>;
+
+  // Shaped like hyparquet's output: DATE and TIMESTAMP are JS Dates, INT64 is bigint.
+  // 2025 was published before `isCeo` existed and has no `remarks`.
+  const FILINGS_2025: ParquetRow[] = [
+    {
+      accession: "0000320193-25-000001",
+      filingDate: new Date("2025-03-14T00:00:00.000Z"),
+      availableAt: new Date("2025-03-15T03:59:59.999Z"),
+      issuerCik: "0000320193",
+      ownerCik: "0001214156",
+      ownerName: "Earlier Chief Executive",
+      isOfficer: true,
+      officerTitle: "Chief Executive Officer",
+      // Not a lake column, and null throughout the first file.
+      footnoteCount: null,
+    },
+    {
+      accession: "0000320193-25-000002",
+      filingDate: new Date("2025-03-17T00:00:00.000Z"),
+      availableAt: new Date("2025-03-18T03:59:59.999Z"),
+      issuerCik: "0000320193",
+      ownerCik: "0001214157",
+      ownerName: "Finance Chief",
+      isOfficer: true,
+      officerTitle: "CFO",
+      footnoteCount: null,
+    },
+  ];
+  const FILINGS_2026: ParquetRow[] = [
     {
       accession: "0000320193-26-000003",
-      availableAt: "2026-09-11T16:08:08.000Z",
+      filingDate: new Date("2026-09-11T00:00:00.000Z"),
+      availableAt: new Date("2026-09-11T16:08:08.000Z"),
       issuerCik: "0000320193",
       ownerCik: "0001214156",
       ownerName: "Chief Executive",
@@ -180,12 +210,13 @@ describe("SQLite column types", () => {
       officerTitle: "President & CEO",
       isCeo: true,
       ceoTitleRule: "ceo-title2",
-      // Not a lake column: typed from its first non-null value.
-      footnoteCount: 3,
+      footnoteCount: 3n,
+      remarks: "Shares held in trust",
     },
     {
       accession: "0000320193-26-000003",
-      availableAt: "2026-09-11T16:08:08.000Z",
+      filingDate: new Date("2026-09-11T00:00:00.000Z"),
+      availableAt: new Date("2026-09-11T16:08:08.000Z"),
       issuerCik: "0000320193",
       ownerCik: "0009999999",
       ownerName: "Fund LP",
@@ -193,85 +224,109 @@ describe("SQLite column types", () => {
       officerTitle: null,
       isCeo: false,
       ceoTitleRule: "ceo-title2",
-      footnoteCount: null,
+      footnoteCount: 1n,
+      remarks: null,
     },
   ];
-  const LEGS = [
+  const LEGS: ParquetRow[] = [
     { accession: "0000320193-26-000003", rowKind: "nonderiv", rowSk: "1", issuerCik: "0000320193", shares: 1000, pricePerShare: 12.5 },
     { accession: "0000320193-26-000003", rowKind: "nonderiv", rowSk: "2", issuerCik: "0000320193", shares: 500, pricePerShare: 13 },
   ];
-  const manifest = (table: string) => ({
-    rows: 2,
-    years: [2026],
-    manifests: [{ year: 2026, files: [{ publicPath: `data/${table}/2026.parquet`, size: 1, sha256: "d".repeat(64) }] }],
+  const PARQUET: Record<string, ParquetRow[]> = {
+    "insider_filings/2025.parquet": FILINGS_2025,
+    "insider_filings/2026.parquet": FILINGS_2026,
+    "insider_transactions/2026.parquet": LEGS,
+  };
+  const manifest = (table: string, years: number[]) => ({
+    rows: 2 * years.length,
+    years,
+    manifests: years.map((year) => ({
+      year,
+      files: [{ publicPath: `data/${table}/${year}.parquet`, size: 1, sha256: "d".repeat(64) }],
+    })),
   });
   const typedSnapshot = {
     schemaVersion: 1,
     dataset: "austin-starks/sec-ownership-disclosures",
     generatedAt: "2026-11-22T00:00:00.000Z",
-    totals: { insider_filings: FILINGS.length, insider_transactions: LEGS.length },
-    tables: { insider_filings: manifest("insider_filings"), insider_transactions: manifest("insider_transactions") },
+    totals: { insider_filings: 4, insider_transactions: 2 },
+    tables: {
+      insider_filings: manifest("insider_filings", [2025, 2026]),
+      insider_transactions: manifest("insider_transactions", [2026]),
+    },
   } as never;
 
-  async function build() {
+  async function query(sql: string): Promise<unknown[]> {
     const datasetDirectory = await mkdtemp(join(tmpdir(), "sec-sqlite-typed-"));
-    return materializeSecOwnershipSqlite({
+    const built = await materializeSecOwnershipSqlite({
       datasetDirectory,
       databasePath: join(datasetDirectory, "out.db"),
       snapshot: typedSnapshot,
-      readParquetFile: async (path) => (path.includes("insider_filings") ? FILINGS : LEGS),
+      readParquetFile: async (path) => {
+        const key = Object.keys(PARQUET).find((suffix) => path.endsWith(suffix));
+        if (!key) throw new Error(`unexpected read ${path}`);
+        return PARQUET[key] ?? [];
+      },
     });
+    const { DatabaseSync } = await import("node:sqlite");
+    const db = new DatabaseSync(built.database);
+    try {
+      return db.prepare(sql).all();
+    } finally {
+      db.close();
+    }
   }
 
-  it("stores booleans and whole numbers as integers, doubles as reals, and identifiers as text", async () => {
-    const built = await build();
-    const { DatabaseSync } = await import("node:sqlite");
-    const db = new DatabaseSync(built.database);
-    try {
-      const filing = db
-        .prepare(
-          "SELECT typeof(isOfficer) AS officer, typeof(isCeo) AS ceo, typeof(footnoteCount) AS footnotes, " +
-            "typeof(issuerCik) AS cikType, issuerCik, ownerCik FROM insider_filings WHERE ownerName = 'Chief Executive'"
-        )
-        .all();
-      expect(filing[0]).toMatchObject({
-        officer: "integer",
-        ceo: "integer",
-        footnotes: "integer",
-        cikType: "text",
-        issuerCik: "0000320193",
-        ownerCik: "0001214156",
-      });
-      const leg = db
-        .prepare("SELECT typeof(shares) AS shares, typeof(pricePerShare) AS price FROM insider_transactions WHERE rowSk = '1'")
-        .all();
-      expect(leg[0]).toMatchObject({ shares: "real", price: "real" });
-    } finally {
-      db.close();
-    }
+  it("stores booleans as integers, doubles as reals, and identifiers, dates and timestamps as text", async () => {
+    const filings = await query(
+      "SELECT typeof(isOfficer) AS officer, typeof(isCeo) AS ceo, typeof(issuerCik) AS cikType, issuerCik, ownerCik, " +
+        "filingDate, availableAt FROM insider_filings WHERE ownerName = 'Chief Executive'"
+    );
+    expect(filings[0]).toMatchObject({
+      officer: "integer",
+      ceo: "integer",
+      cikType: "text",
+      issuerCik: "0000320193",
+      ownerCik: "0001214156",
+      filingDate: "2026-09-11",
+      availableAt: "2026-09-11T16:08:08.000Z",
+    });
+    const legs = await query(
+      "SELECT typeof(shares) AS shares, typeof(pricePerShare) AS price FROM insider_transactions WHERE rowSk = '1'"
+    );
+    expect(legs[0]).toMatchObject({ shares: "real", price: "real" });
   });
 
-  it("answers boolean and numeric filters as numbers", async () => {
-    const built = await build();
-    const { DatabaseSync } = await import("node:sqlite");
-    const db = new DatabaseSync(built.database);
-    try {
-      const officers = db.prepare("SELECT ownerName FROM insider_filings WHERE isOfficer = 1").all();
-      expect(officers).toHaveLength(1);
-      expect(officers[0]).toMatchObject({ ownerName: "Chief Executive" });
-      const ceos = db.prepare("SELECT ownerName, ceoTitleRule FROM insider_filings WHERE isCeo = 1").all();
-      expect(ceos).toHaveLength(1);
-      expect(ceos[0]).toMatchObject({ ownerName: "Chief Executive", ceoTitleRule: "ceo-title2" });
-      // As text, "1000.0" > "600" is false: the comparison must be numeric.
-      const large = db.prepare("SELECT rowSk FROM insider_transactions WHERE shares > 600").all();
-      expect(large).toHaveLength(1);
-      expect(large[0]).toMatchObject({ rowSk: "1" });
-      // As text, "12.5" > "9" is false as well.
-      const priced = db.prepare("SELECT rowSk FROM insider_transactions WHERE pricePerShare > 9").all();
-      expect(priced).toHaveLength(2);
-    } finally {
-      db.close();
-    }
+  it("answers boolean, date and numeric filters", async () => {
+    expect(await query("SELECT ownerName FROM insider_filings WHERE isOfficer = 1")).toHaveLength(3);
+    const filedOn = await query("SELECT ownerName FROM insider_filings WHERE filingDate = '2025-03-14'");
+    expect(filedOn).toHaveLength(1);
+    expect(filedOn[0]).toMatchObject({ ownerName: "Earlier Chief Executive" });
+    // As text, "1000.0" > "600" and "12.5" > "9" are both false.
+    const large = await query("SELECT rowSk FROM insider_transactions WHERE shares > 600");
+    expect(large).toHaveLength(1);
+    expect(large[0]).toMatchObject({ rowSk: "1" });
+    expect(await query("SELECT rowSk FROM insider_transactions WHERE pricePerShare > 9")).toHaveLength(2);
+  });
+
+  it("recomputes CEO columns for a year published before they existed", async () => {
+    const ceos = await query("SELECT ownerName, ceoTitleRule FROM insider_filings WHERE isCeo = 1 ORDER BY availableAt");
+    expect(ceos).toHaveLength(2);
+    expect(ceos[0]).toMatchObject({ ownerName: "Earlier Chief Executive", ceoTitleRule: "ceo-title2" });
+    expect(ceos[1]).toMatchObject({ ownerName: "Chief Executive", ceoTitleRule: "ceo-title2" });
+    const cfo = await query("SELECT isCeo, ceoTitleRule FROM insider_filings WHERE ownerName = 'Finance Chief'");
+    expect(cfo[0]).toMatchObject({ isCeo: 0, ceoTitleRule: "ceo-title2" });
+  });
+
+  it("keeps undeclared columns numeric after an all-null first file, and adds a column first seen later", async () => {
+    const counted = await query(
+      "SELECT ownerName, typeof(footnoteCount) AS kind FROM insider_filings WHERE footnoteCount > 2"
+    );
+    expect(counted).toHaveLength(1);
+    expect(counted[0]).toMatchObject({ ownerName: "Chief Executive", kind: "integer" });
+    const remarked = await query("SELECT ownerName, remarks FROM insider_filings WHERE remarks IS NOT NULL");
+    expect(remarked).toHaveLength(1);
+    expect(remarked[0]).toMatchObject({ ownerName: "Chief Executive", remarks: "Shares held in trust" });
   });
 });
 
