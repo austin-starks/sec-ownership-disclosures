@@ -89,6 +89,15 @@ describe("insiderShardRows", () => {
     expect(insiderFilingFromShard(stale)).toMatchObject({ isCeo: false, ceoTitleRule: "ceo-title2" });
   });
 
+  it("refuses a CEO flag stamped by a newer rule than this package knows", () => {
+    expect(() => insiderFilingFromShard({ ...FILING, isCeo: true, ceoTitleRule: "ceo-title3" })).toThrow(
+      "insider_filings row was classified by ceo-title3, newer than this package's ceo-title2; upgrade sec-ownership-disclosures to read it"
+    );
+    expect(() => insiderFilingFromShard({ ...FILING, ceoTitleRule: "manual" })).toThrow(
+      'insider_filings row has an unexpected ceoTitleRule: "manual"'
+    );
+  });
+
   it("stops on a value outside the row's type", () => {
     expect(() => insiderTransactionFromShard({ ...TRANSACTION, rowKind: "holding" })).toThrow(
       'insider_transactions row has an unexpected rowKind: "holding"'
