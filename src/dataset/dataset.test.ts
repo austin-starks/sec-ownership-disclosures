@@ -168,64 +168,107 @@ describe("materializeSecOwnershipSqlite", () => {
   });
 });
 
-describe("insider_filings in SQLite", () => {
+describe("SQLite column types", () => {
   const FILINGS = [
     {
-      accession: "0003",
+      accession: "0000320193-26-000003",
       availableAt: "2026-09-11T16:08:08.000Z",
-      issuerCik: "1304492",
+      issuerCik: "0000320193",
+      ownerCik: "0001214156",
       ownerName: "Chief Executive",
+      isOfficer: true,
       officerTitle: "President & CEO",
       isCeo: true,
       ceoTitleRule: "ceo-title2",
+      // Not a lake column: typed from its first non-null value.
+      footnoteCount: 3,
     },
     {
-      accession: "0003",
+      accession: "0000320193-26-000003",
       availableAt: "2026-09-11T16:08:08.000Z",
-      issuerCik: "1304492",
-      ownerName: "Incoming Executive",
-      officerTitle: "CEO-Elect",
+      issuerCik: "0000320193",
+      ownerCik: "0009999999",
+      ownerName: "Fund LP",
+      isOfficer: false,
+      officerTitle: null,
       isCeo: false,
       ceoTitleRule: "ceo-title2",
+      footnoteCount: null,
     },
   ];
-  const filingsSnapshot = {
+  const LEGS = [
+    { accession: "0000320193-26-000003", rowKind: "nonderiv", rowSk: "1", issuerCik: "0000320193", shares: 1000, pricePerShare: 12.5 },
+    { accession: "0000320193-26-000003", rowKind: "nonderiv", rowSk: "2", issuerCik: "0000320193", shares: 500, pricePerShare: 13 },
+  ];
+  const manifest = (table: string) => ({
+    rows: 2,
+    years: [2026],
+    manifests: [{ year: 2026, files: [{ publicPath: `data/${table}/2026.parquet`, size: 1, sha256: "d".repeat(64) }] }],
+  });
+  const typedSnapshot = {
     schemaVersion: 1,
     dataset: "austin-starks/sec-ownership-disclosures",
     generatedAt: "2026-11-22T00:00:00.000Z",
-    totals: { insider_filings: FILINGS.length },
-    tables: {
-      insider_filings: {
-        rows: FILINGS.length,
-        years: [2026],
-        manifests: [
-          {
-            year: 2026,
-            files: [{ publicPath: "data/insider_filings/2026.parquet", size: 1, sha256: "d".repeat(64) }],
-          },
-        ],
-      },
-    },
+    totals: { insider_filings: FILINGS.length, insider_transactions: LEGS.length },
+    tables: { insider_filings: manifest("insider_filings"), insider_transactions: manifest("insider_transactions") },
   } as never;
 
-  it("carries the title-derived CEO columns, so a CEO filter is one WHERE clause", async () => {
-    const datasetDirectory = await mkdtemp(join(tmpdir(), "sec-sqlite-ceo-"));
-    await mkdir(join(datasetDirectory, "data/insider_filings"), { recursive: true });
-    await writeFile(join(datasetDirectory, "data/insider_filings/2026.parquet"), "stub");
-
-    const built = await materializeSecOwnershipSqlite({
+  async function build() {
+    const datasetDirectory = await mkdtemp(join(tmpdir(), "sec-sqlite-typed-"));
+    return materializeSecOwnershipSqlite({
       datasetDirectory,
       databasePath: join(datasetDirectory, "out.db"),
-      snapshot: filingsSnapshot,
-      readParquetFile: async () => FILINGS,
+      snapshot: typedSnapshot,
+      readParquetFile: async (path) => (path.includes("insider_filings") ? FILINGS : LEGS),
     });
+  }
 
+  it("stores booleans and whole numbers as integers, doubles as reals, and identifiers as text", async () => {
+    const built = await build();
     const { DatabaseSync } = await import("node:sqlite");
     const db = new DatabaseSync(built.database);
     try {
+      const filing = db
+        .prepare(
+          "SELECT typeof(isOfficer) AS officer, typeof(isCeo) AS ceo, typeof(footnoteCount) AS footnotes, " +
+            "typeof(issuerCik) AS cikType, issuerCik, ownerCik FROM insider_filings WHERE ownerName = 'Chief Executive'"
+        )
+        .all();
+      expect(filing[0]).toMatchObject({
+        officer: "integer",
+        ceo: "integer",
+        footnotes: "integer",
+        cikType: "text",
+        issuerCik: "0000320193",
+        ownerCik: "0001214156",
+      });
+      const leg = db
+        .prepare("SELECT typeof(shares) AS shares, typeof(pricePerShare) AS price FROM insider_transactions WHERE rowSk = '1'")
+        .all();
+      expect(leg[0]).toMatchObject({ shares: "real", price: "real" });
+    } finally {
+      db.close();
+    }
+  });
+
+  it("answers boolean and numeric filters as numbers", async () => {
+    const built = await build();
+    const { DatabaseSync } = await import("node:sqlite");
+    const db = new DatabaseSync(built.database);
+    try {
+      const officers = db.prepare("SELECT ownerName FROM insider_filings WHERE isOfficer = 1").all();
+      expect(officers).toHaveLength(1);
+      expect(officers[0]).toMatchObject({ ownerName: "Chief Executive" });
       const ceos = db.prepare("SELECT ownerName, ceoTitleRule FROM insider_filings WHERE isCeo = 1").all();
       expect(ceos).toHaveLength(1);
       expect(ceos[0]).toMatchObject({ ownerName: "Chief Executive", ceoTitleRule: "ceo-title2" });
+      // As text, "1000.0" > "600" is false: the comparison must be numeric.
+      const large = db.prepare("SELECT rowSk FROM insider_transactions WHERE shares > 600").all();
+      expect(large).toHaveLength(1);
+      expect(large[0]).toMatchObject({ rowSk: "1" });
+      // As text, "12.5" > "9" is false as well.
+      const priced = db.prepare("SELECT rowSk FROM insider_transactions WHERE pricePerShare > 9").all();
+      expect(priced).toHaveLength(2);
     } finally {
       db.close();
     }

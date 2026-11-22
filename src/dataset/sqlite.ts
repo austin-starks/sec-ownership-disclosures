@@ -3,13 +3,17 @@
  *
  * SQLite comes from `node:sqlite` (Node 22.5+) and Parquet from `hyparquet`, so
  * nothing here needs a native build step: `npx` works on a laptop with no
- * toolchain. Columns are written as the source declares them, with
- * `availableAt` kept as an ISO string so `WHERE availableAt <= '2024-01-01'`
- * does what it looks like it does.
+ * toolchain. Each column gets the SQLite type of its lake type: booleans are
+ * INTEGER 0/1, doubles REAL, and identifiers, dates and timestamps TEXT, so
+ * `WHERE isOfficer = 1` and `WHERE shares > 1000` compare as numbers, CIKs and
+ * CUSIPs keep their leading zeros, and `availableAt` stays an ISO string so
+ * `WHERE availableAt <= '2024-01-01'` does what it looks like it does.
  */
 import { mkdir, rename, stat, unlink } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
+import { THIRTEEN_F_FILINGS_COLUMNS, THIRTEEN_F_HOLDINGS_COLUMNS } from "../lake/holdingsTables";
+import { INSIDER_FILINGS_COLUMNS, INSIDER_TRANSACTIONS_COLUMNS } from "../lake/insiderLakeTables";
 import { selectDatasetFiles } from "./download";
 import type {
   DatasetFile,
@@ -66,6 +70,56 @@ const DECLARED_COLUMNS: Record<SecOwnershipTable, readonly string[]> = {
   ],
 };
 
+enum SqliteColumnType {
+  Integer = "INTEGER",
+  Real = "REAL",
+  Text = "TEXT",
+}
+
+/** The lake's declared column types, from the same maps the Parquet writer uses. */
+const LAKE_COLUMN_TYPES: Record<SecOwnershipTable, Readonly<Record<string, string>>> = {
+  insider_filings: INSIDER_FILINGS_COLUMNS,
+  insider_transactions: INSIDER_TRANSACTIONS_COLUMNS,
+  institutional_filings: THIRTEEN_F_FILINGS_COLUMNS,
+  institutional_holdings: THIRTEEN_F_HOLDINGS_COLUMNS,
+};
+
+const SQLITE_TYPE_OF_LAKE_TYPE: Readonly<Record<string, SqliteColumnType>> = {
+  BOOLEAN: SqliteColumnType.Integer,
+  BIGINT: SqliteColumnType.Integer,
+  INTEGER: SqliteColumnType.Integer,
+  DOUBLE: SqliteColumnType.Real,
+  VARCHAR: SqliteColumnType.Text,
+  DATE: SqliteColumnType.Text,
+  TIMESTAMP: SqliteColumnType.Text,
+};
+
+function sqliteTypeOfValue(value: unknown): SqliteColumnType {
+  if (typeof value === "boolean" || typeof value === "bigint") return SqliteColumnType.Integer;
+  if (typeof value === "number") return Number.isInteger(value) ? SqliteColumnType.Integer : SqliteColumnType.Real;
+  return SqliteColumnType.Text;
+}
+
+/**
+ * A declared column takes the SQLite type of its lake type. A column the
+ * package does not declare takes the type of its first non-null value.
+ */
+function columnType(
+  table: SecOwnershipTable,
+  column: string,
+  rows: readonly Record<string, unknown>[]
+): SqliteColumnType {
+  const declaredTypes = LAKE_COLUMN_TYPES[table];
+  const lakeType = Object.hasOwn(declaredTypes, column) ? declaredTypes[column] : undefined;
+  if (lakeType !== undefined) {
+    const declared = SQLITE_TYPE_OF_LAKE_TYPE[lakeType];
+    if (!declared) throw new Error(`no SQLite type for ${table}.${column} (${lakeType})`);
+    return declared;
+  }
+  const sample = rows.find((row) => row[column] !== null && row[column] !== undefined)?.[column];
+  return sqliteTypeOfValue(sample);
+}
+
 function quote(identifier: string): string {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier)) {
     throw new Error(`unsafe column name in the dataset: ${identifier}`);
@@ -73,11 +127,17 @@ function quote(identifier: string): string {
   return `"${identifier}"`;
 }
 
-/** SQLite takes null, number, bigint, string and Buffer. Everything else is stringified. */
+/**
+ * SQLite takes null, number, bigint, string and Buffer. node:sqlite binds every
+ * JS number as REAL, which a TEXT column stores as "1.0", so booleans and whole
+ * numbers bind as bigint and are stored as integers. Everything else is
+ * stringified.
+ */
 function bindable(value: unknown): null | number | bigint | string | Uint8Array {
   if (value === null || value === undefined) return null;
-  if (typeof value === "number" || typeof value === "bigint" || typeof value === "string") return value;
-  if (typeof value === "boolean") return value ? 1 : 0;
+  if (typeof value === "boolean") return value ? 1n : 0n;
+  if (typeof value === "number") return Number.isSafeInteger(value) ? BigInt(value) : value;
+  if (typeof value === "bigint" || typeof value === "string") return value;
   if (value instanceof Date) return value.toISOString();
   if (value instanceof Uint8Array) return value;
   return JSON.stringify(value);
@@ -146,9 +206,8 @@ export async function materializeSecOwnershipSqlite(
           const seen = new Set<string>(DECLARED_COLUMNS[table]);
           for (const key of Object.keys(parquetRows[0]!)) seen.add(key);
           columns = [...seen];
-          db.exec(
-            `CREATE TABLE IF NOT EXISTS ${quote(table)} (${columns.map((c) => `${quote(c)} TEXT`).join(", ")})`
-          );
+          const definitions = columns.map((c) => `${quote(c)} ${columnType(table, c, parquetRows)}`);
+          db.exec(`CREATE TABLE IF NOT EXISTS ${quote(table)} (${definitions.join(", ")})`);
           insert = db.prepare(
             `INSERT INTO ${quote(table)} (${columns.map(quote).join(", ")}) ` +
               `VALUES (${columns.map(() => "?").join(", ")})`

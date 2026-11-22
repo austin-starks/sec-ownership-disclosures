@@ -17,6 +17,22 @@ Forms 3/4/5 have no CEO field: the role lives in a free-text officer title.
   assistant CEOs, staff and relatives of the CEO, CEOs of a region, division
   or subsidiary, and titles that name no CEO (including "See Remarks") do not.
 - The SQLite build declares both columns on `insider_filings`.
+
+### Correction: SQLite columns are typed
+
+Earlier builds created every SQLite column as TEXT, and node:sqlite binds JS
+numbers as REAL, so a boolean was stored as the text `"1.0"` and a share count
+as `"100.0"`. `WHERE isOfficer = 1` matched nothing and `WHERE shares > 1000`
+compared strings.
+
+- Each column now takes the SQLite type of its lake type, read from the same
+  column maps the Parquet writer uses: booleans are INTEGER 0/1, doubles REAL,
+  and identifiers (`accession`, `issuerCik`, `ownerCik`, `cusip`), dates and
+  timestamps TEXT, so leading zeros are kept. A column the package does not
+  declare takes the type of its first non-null value.
+- Booleans and whole numbers bind as integers.
+- **Rebuild any SQLite file made by an earlier version** (`download --sqlite`
+  again); the old file keeps the text values.
 - Shards written before this version have no `isCeo`, and a shard stamped by an
   earlier rule holds that rule's reading. The shard reader derives both from
   `officerTitle` with the current rule, so a lake can be republished year by
