@@ -259,7 +259,11 @@ a title that names no CEO, including SEC's `See Remarks` placeholder.
 Each row reads the title on its own filing, so the flag is point-in-time: a
 CEO's earlier filings as CFO stay false, and an amendment reads the title the
 amendment carries. `ceoTitleRule` changes whenever the rule changes what any
-title reads as, and every published year is rewritten under one rule.
+title reads as. A year file published before the columns existed, or stamped by
+an earlier rule, is recomputed from `officerTitle` with the current rule, both
+by the shard reader (`insiderFilingFromShard`) and by the SQLite build, so a
+database never mixes rules or leaves `isCeo` NULL. A file stamped by a newer
+rule than the installed package stops the read with a message to upgrade.
 
 ```bash
 npx sec-ownership-disclosures download --table insider_filings --year 2024 \
@@ -270,11 +274,23 @@ sqlite3 insider-filings/sec-ownership.db \
     WHERE isCeo = 1 GROUP BY 1 ORDER BY 2 DESC LIMIT 10"
 ```
 
-In a database holding both insider tables,
-`accession IN (SELECT accession FROM insider_filings WHERE isCeo = 1)` narrows
-`insider_transactions` to filings that name a CEO as a reporting owner. The
-subquery keeps each transaction once: a joint filing has one `insider_filings`
-row per owner, so a plain join repeats its transactions.
+To count CEO open-market purchases, build a database holding both insider
+tables. `--year` without `--table` downloads every table for that year,
+including the 13F holdings:
+
+```bash
+npx sec-ownership-disclosures download --year 2024 --out ./sec-2024 --sqlite
+
+sqlite3 sec-2024/sec-ownership.db \
+  "SELECT resolvedTicker, count(*) FROM insider_transactions
+    WHERE transactionCode = 'P'
+      AND accession IN (SELECT accession FROM insider_filings WHERE isCeo = 1)
+    GROUP BY 1 ORDER BY 2 DESC LIMIT 10"
+```
+
+The subquery narrows `insider_transactions` to filings that name a CEO as a
+reporting owner and keeps each transaction once: a joint filing has one
+`insider_filings` row per owner, so a plain join repeats its transactions.
 
 The classifier is exported as `insiderOfficerTitleRole` and
 `insiderTitleIsCeo`, with `INSIDER_CEO_TITLE_RULE`, so the same rule can be

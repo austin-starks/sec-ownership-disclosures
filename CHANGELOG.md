@@ -16,7 +16,27 @@ Forms 3/4/5 have no CEO field: the role lives in a free-text officer title.
   count. Former, retired, incoming, elect, designate, deputy, vice and
   assistant CEOs, staff and relatives of the CEO, CEOs of a region, division
   or subsidiary, and titles that name no CEO (including "See Remarks") do not.
+- Shards written before this version have no `isCeo`, and a shard stamped by an
+  earlier rule holds that rule's reading. `insiderFilingCeoColumnsFromShard`
+  derives both from `officerTitle` with the current rule, and both the shard
+  reader and the SQLite build use it, so a lake can be republished year by year
+  without a flag day and a database never holds a NULL `isCeo`. Rows written by
+  the current rule are read as stored. A row stamped by a newer rule
+  (`ceo-title3` and later) throws with a message to upgrade the package.
 - The SQLite build declares both columns on `insider_filings`.
+
+### Breaking changes
+
+- `INSIDER_FILINGS_COLUMNS` gains `isCeo` and `ceoTitleRule`. A reader that
+  projects this column map over year files published before 0.5.0 must treat
+  the two columns as optional (or pass them as optional columns); those files
+  do not have them.
+- `InsiderFilingRow` gains two required fields, `isCeo` and `ceoTitleRule`.
+  Code that builds filing rows by hand can spread
+  `insiderCeoColumns(officerTitle)` into them.
+- SQLite storage types change, as described in the correction below. Queries
+  that compared booleans or numbers as text (`isOfficer = '1.0'`) or dates as
+  full timestamps no longer match.
 
 ### Correction: SQLite columns are typed
 
@@ -28,17 +48,17 @@ compared strings.
 - Each column now takes the SQLite type of its lake type, read from the same
   column maps the Parquet writer uses: booleans are INTEGER 0/1, doubles REAL,
   and identifiers (`accession`, `issuerCik`, `ownerCik`, `cusip`), dates and
-  timestamps TEXT, so leading zeros are kept. A column the package does not
-  declare takes the type of its first non-null value.
+  timestamps TEXT, so leading zeros are kept.
 - Booleans and whole numbers bind as integers.
+- DATE columns are written as `YYYY-MM-DD`. hyparquet reads them as JS Dates,
+  which were written as full timestamps, so `WHERE filingDate = '2024-03-15'`
+  matched nothing. TIMESTAMP columns keep the full ISO string.
+- A column the package does not declare has no SQLite type, so each value keeps
+  the type it was bound with, even when the first file holds only nulls.
+- The column set is the union across every file of a table: a column first seen
+  in a later year is added instead of dropped.
 - **Rebuild any SQLite file made by an earlier version** (`download --sqlite`
   again); the old file keeps the text values.
-- Shards written before this version have no `isCeo`, and a shard stamped by an
-  earlier rule holds that rule's reading. The shard reader derives both from
-  `officerTitle` with the current rule, so a lake can be republished year by
-  year without a flag day. Rows written by the current rule are read as stored.
-- `InsiderFilingRow` gains two required fields; code that builds filing rows by
-  hand can spread `insiderCeoColumns(officerTitle)` into them.
 
 ## 0.4.1
 
