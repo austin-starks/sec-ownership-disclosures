@@ -59,6 +59,18 @@ npm run verify:release
 Every test runs against committed fixtures. Nothing in the suite reaches the
 network, so it works on a plane and fails for real reasons.
 
+## Release
+
+Bump the version in `package.json`, `package-lock.json` and `CHANGELOG.md` in the
+release commit, merge it, then from a clean `main` that matches `origin/main`:
+
+```bash
+make release-check   # preflight, install, typecheck, audit, build, tests, pack; safe to re-run
+make release         # the same, then npm publish (2FA in the browser) and the vX.Y.Z tag
+```
+
+`make release-tag` alone finishes a release whose publish already succeeded.
+
 ## License
 
 By contributing you agree that your contributions are licensed under the MIT
